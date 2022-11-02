@@ -1,0 +1,17 @@
+[package]
+name = "bevy_mujoco"
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+arrayvec = "0.7.2"
+bevy = "0.9.0"
+mujoco-rs-sys = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "89affc5", default-features = false }
+mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "89affc5" }
+bevy_obj = { git = "https://github.com/stillonearth/bevy_obj.git", rev = "786c82c" }
+trees = "0.4.1"
+
+[dev-dependencies]
+bevy-inspector-egui = { version = "0.14.0" }
+bevy_flycam = { git = "https://github.com/sburris0/bevy_flycam" }

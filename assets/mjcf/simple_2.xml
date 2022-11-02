@@ -1,0 +1,22 @@
+<mujoco>
+    <default>
+        <joint axis="0 0 1" limited="true" range="-90 90" damping="0.3"/>
+        <geom size=".1 .1 .1" type="box"/>
+    </default>
+
+    <worldbody>
+        <body>
+            <joint name="joint1"/>
+            <geom/>
+        </body>
+        <body pos=".3 0 0">
+            <joint name="joint2"/>
+            <geom/>
+        </body>
+    </worldbody>
+
+    <actuator>
+        <general name="unclamped" joint="joint1" gainprm="1" biastype="affine" biasprm="0 -1" dyntype="integrator"/>
+        <intvelocity name="clamped" joint="joint2" actrange="-1.57 1.57"/>
+    </actuator>
+</mujoco>
