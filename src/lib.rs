@@ -2,6 +2,7 @@ use arrayvec::ArrayVec;
 use trees::Tree;
 
 use bevy::{
+    ecs::system::EntityCommands,
     prelude::*,
     render::{
         mesh::{Indices, Mesh},
@@ -12,8 +13,11 @@ use bevy_obj::load_obj_from_bytes;
 
 use mujoco_rs_sys::mjData;
 
-use std::fs::{self, File};
-use std::io::Read;
+use std::{cell::RefCell, io::Read};
+use std::{
+    fs::{self, File},
+    rc::Rc,
+};
 
 mod mujoco_shape;
 
@@ -124,12 +128,20 @@ impl Geom {
         }
     }
 
-    pub fn quaternion(self) -> Quat {
+    pub fn rotation(&self) -> Quat {
         Quat::from_xyzw(self.quat[0], self.quat[1], self.quat[2], self.quat[3])
     }
 
-    pub fn position(self) -> Vec3 {
+    pub fn translation(&self) -> Vec3 {
         Vec3::new(self.pos[0], self.pos[1], self.pos[2])
+    }
+
+    pub fn transform(&self) -> Transform {
+        Transform {
+            translation: self.translation(),
+            rotation: self.rotation(),
+            ..default()
+        }
     }
 }
 
@@ -147,12 +159,22 @@ pub struct Body {
 }
 
 impl Body {
-    pub fn quaternion(self) -> Quat {
+    pub fn rotation(&self) -> Quat {
         Quat::from_xyzw(self.quat[0], self.quat[1], self.quat[2], self.quat[3])
     }
 
-    pub fn position(self) -> Vec3 {
+    pub fn translation(&self) -> Vec3 {
         Vec3::new(self.pos[0], self.pos[1], self.pos[2])
+    }
+
+    pub fn transform(&self) -> Transform {
+        // print!("{:?}", self.rotation());
+
+        Transform {
+            translation: self.translation(),
+            rotation: self.rotation() * self.rotation(),
+            ..default()
+        }
     }
 }
 
@@ -668,11 +690,16 @@ impl Plugin for MuJoCoPlugin {
     }
 }
 
+#[allow(unused_mut)]
+#[allow(unused_variables)]
+#[allow(unreachable_code)]
 fn simulate_physics(
     mujoco: ResMut<MuJoCo>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
     mujoco_resources: Res<MuJoCoResources>,
 ) {
+    return;
+
     // Target 60 fps in simulation
     let _sim_start = mujoco.time();
     // while mujoco.time() - sim_start < 1.0 / 60.0 {
@@ -716,54 +743,108 @@ fn simulate_physics(
 
 fn setup_mujoco(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
     settings: Res<MuJoCoPluginSettings>,
     mujoco: Res<MuJoCo>,
 ) {
     let bodies = mujoco.bodies();
     let geoms = mujoco.geoms();
 
-    commands.spawn(()).with_children(|_children| {});
+    // commands.spawn(()).with_children(|_children| {});
 
     commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
-        bodies,
+        bodies: bodies,
     });
 
-    let bodies = mujoco.body_tree();
+    struct SpawnEntities<'s> {
+        f: &'s dyn Fn(&SpawnEntities, Tree<Body>, &Rc<RefCell<EntityCommands>>),
+    }
 
-    for tree in bodies.iter() {
-        // Recursively insert geometry
-        let body = tree.data();
-        let geom = geoms.iter().find(|geom| geom.body_id == body.id).unwrap();
+    impl SpawnEntities<'_> {
+        fn spawn_body(
+            &self,
+            body: &Body,
+            geoms: &Vec<Geom>,
+            settings: &Res<MuJoCoPluginSettings>,
+            entity_commands: &Rc<RefCell<EntityCommands>>,
+            meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
+            materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
+        ) {
+            let body_id = body.id;
+            let geom = geoms.iter().find(|geom| geom.body_id == body_id).unwrap();
 
-        // Extracting mesh from mujoco object doesn't work correctly
-        // Insted load the obj directly with `bevy_obj`
+            // Extracting mesh from mujoco object doesn't work correctly
+            // Insted load the obj directly with `bevy_obj`
+            let mesh = geom.mesh(settings.model_assets_path.clone());
 
-        let mesh = geom.mesh(settings.model_assets_path.clone());
-        let mesh = meshes.add(mesh);
+            let body_transform = body.transform();
+            let geom_transform = geom.clone().transform();
 
-        let translation = Vec3::from_array(body.pos);
-        let material = materials.add(StandardMaterial {
-            base_color: Color::rgba(geom.color[0], geom.color[1], geom.color[2], geom.color[3]),
-            ..Default::default()
-        });
+            // deref
+            let mut entity_commands = entity_commands.borrow_mut();
+            let mut meshes = meshes.borrow_mut();
+            let mut materials = materials.borrow_mut();
 
-        commands
-            .spawn(PbrBundle {
-                mesh,
-                material,
-                transform: Transform {
-                    translation,
-                    rotation: body.clone().quaternion(),
+            entity_commands
+                .commands()
+                .spawn(PbrBundle {
+                    mesh: meshes.add(mesh),
+                    material: materials.add(StandardMaterial {
+                        base_color: Color::rgba(
+                            geom.color[0],
+                            geom.color[1],
+                            geom.color[2],
+                            geom.color[3],
+                        ),
+                        ..default()
+                    }),
+                    transform: Transform {
+                        translation: body_transform.translation + geom_transform.translation,
+                        rotation: (body_transform.rotation * geom_transform.rotation)
+                            * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+                            * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                        ..default()
+                    },
                     ..default()
-                },
-                ..default()
-            })
-            .insert(MuJoCoBody { id: body.id })
-            // TODO: recurrent body composition
-            .with_children(|_children| {});
+                })
+                .insert(MuJoCoBody { id: body_id })
+                .insert(Name::new(format!("MuJoCo::body_{}", body.name)));
+        }
+    }
+
+    let meshes = Rc::new(RefCell::new(meshes));
+    let materials = Rc::new(RefCell::new(materials));
+
+    let spawn_entities = SpawnEntities {
+        f: &|func, mut body, entity_commands| {
+            let root_leaf = body.data();
+            func.spawn_body(
+                root_leaf,
+                &geoms,
+                &settings,
+                entity_commands,
+                &meshes,
+                &materials,
+            );
+            let mut entity_commands = entity_commands.borrow_mut();
+            entity_commands.with_children(|children| loop {
+                let leaf = body.pop_back();
+                if leaf.is_none() {
+                    break;
+                }
+                let leaf = leaf.unwrap();
+                let entity_commands = children.spawn(());
+                let entity_commands = Rc::new(RefCell::new(entity_commands));
+                (func.f)(func, leaf, &entity_commands);
+            });
+        },
+    };
+
+    for body in mujoco.body_tree() {
+        let entity_commands = Rc::new(RefCell::new(commands.spawn(())));
+        (spawn_entities.f)(&spawn_entities, body, &entity_commands);
     }
 
     // mujoco.step();
@@ -808,6 +889,38 @@ mod tests {
         let bodies_tree = model.body_tree();
 
         assert!(bodies_tree.len() == 2);
+
+        fn print_body_tree_level(mut tree: Tree<Body>, level: usize) -> String {
+            let mut ret = format!("{}{}\n", "--".repeat(level), tree.data().name);
+
+            loop {
+                let leaf = tree.pop_back();
+                if leaf.is_none() {
+                    break;
+                }
+                ret = format!("{}{}", ret, print_body_tree_level(leaf.unwrap(), level + 1));
+            }
+
+            ret
+        }
+
+        let tree_structure = print_body_tree_level(bodies_tree[1].clone(), 0);
+        let exprected_tree_structure = r"trunk
+--RL_hip
+----RL_thigh
+------RL_calf
+--RR_hip
+----RR_thigh
+------RR_calf
+--FL_hip
+----FL_thigh
+------FL_calf
+--FR_hip
+----FR_thigh
+------FR_calf
+";
+
+        assert!(tree_structure == exprected_tree_structure);
     }
 
     #[test]
