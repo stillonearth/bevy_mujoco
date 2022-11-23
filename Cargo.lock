@@ -619,8 +619,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_obj"
-version = "0.9.0"
-source = "git+https://github.com/stillonearth/bevy_obj.git?rev=786c82c#786c82ce6f905674404db9875888cd9db515f092"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4debeed864b621ce409b6a5273c80ab9a33106289d1f0beca374a3aaea1b0cc"
 dependencies = [
  "anyhow",
  "bevy_app",

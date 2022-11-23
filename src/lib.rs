@@ -185,10 +185,7 @@ impl MuJoCoMesh {
         let mut buffer = vec![0; metadata.len() as usize];
         f.read_exact(&mut buffer).expect("buffer overflow");
 
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-        load_obj_from_bytes(&buffer, &mut mesh).unwrap();
-
-        mesh
+        load_obj_from_bytes(&buffer).unwrap()
     }
 }
 

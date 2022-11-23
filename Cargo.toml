@@ -9,7 +9,7 @@ arrayvec = "0.7.2"
 bevy = "0.9.0"
 mujoco-rs-sys = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "89affc5", default-features = false }
 mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "89affc5" }
-bevy_obj = { git = "https://github.com/stillonearth/bevy_obj.git", rev = "786c82c" }
+bevy_obj = "0.9.1"
 trees = "0.4.1"
 
 [dev-dependencies]

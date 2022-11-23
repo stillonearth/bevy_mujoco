@@ -1,4 +1,5 @@
 use std::env;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -37,6 +38,7 @@ fn main() {
                 mj_lib_windows.join("mujoco.dll"),
             );
 
+            fs::create_dir_all(&target_dir).unwrap();
             let dest = Path::join(Path::new(&target_dir), Path::new("mujoco.dll"));
             eprintln!("Copying {:?} to {:?}", src, dest);
             std::fs::copy(src, dest).unwrap();
