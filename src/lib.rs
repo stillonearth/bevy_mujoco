@@ -1,4 +1,5 @@
 use arrayvec::ArrayVec;
+use serde::{Serialize, Serializer};
 use trees::Tree;
 
 use bevy::{
@@ -13,10 +14,7 @@ use bevy_obj::load_obj_from_bytes;
 
 use mujoco_rs_sys::mjData;
 
-use std::{
-    cell::{RefCell, RefMut},
-    io::Read,
-};
+use std::{cell::RefCell, io::Read};
 use std::{
     fs::{self, File},
     rc::Rc,
@@ -148,7 +146,7 @@ impl Geom {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Body {
     pub id: i32,
     pub name: String,
@@ -234,6 +232,49 @@ impl LocalFloat for Local<f64> {
 impl LocalFloat for Local<i32> {
     fn to_f32(&self) -> f32 {
         self.0 as f32
+    }
+}
+
+#[derive(Deref, DerefMut)]
+pub struct BodyTree(pub Tree<Body>);
+
+impl Serialize for BodyTree {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        #[derive(Serialize)]
+        struct BodyTreeSerialized {
+            pub body: Body,
+            pub children: Vec<BodyTreeSerialized>,
+        }
+
+        fn collect_children(tree: &Tree<Body>) -> Vec<BodyTreeSerialized> {
+            let mut children = vec![];
+            let mut tree = tree.clone();
+            loop {
+                let leaf = tree.pop_back();
+                if leaf.is_none() {
+                    break;
+                }
+                let leaf = leaf.unwrap();
+                children.push(BodyTreeSerialized {
+                    body: leaf.data().clone(),
+                    children: collect_children(&leaf),
+                });
+            }
+            children
+        }
+
+        let item = Some(BodyTreeSerialized {
+            body: self.0.data().clone(),
+            children: collect_children(&self.0),
+        });
+
+        match item {
+            Some(item) => item.serialize(serializer),
+            None => serializer.serialize_none(),
+        }
     }
 }
 
@@ -618,15 +659,15 @@ impl MuJoCo {
         bodies
     }
 
-    pub fn body_tree(&self) -> Vec<Tree<Body>> {
-        let mut trees: Vec<Tree<Body>> = vec![];
+    pub fn body_tree(&self) -> Vec<BodyTree> {
+        let mut trees: Vec<BodyTree> = vec![];
         let bodies = self.bodies();
 
         let root_bodies = bodies.iter().filter(|body| body.parent_id == 0);
 
         for body in root_bodies {
-            let mut root_leaf: Tree<Body> = Tree::new(body.clone());
-            collect_children(&mut root_leaf, &bodies);
+            let mut root_leaf: BodyTree = BodyTree(Tree::new(body.clone()));
+            collect_children(&mut root_leaf.0, &bodies);
 
             trees.push(root_leaf);
         }
@@ -761,20 +802,21 @@ fn setup_mujoco(
 
     // this is a closure that can call itself recursively
     struct SpawnEntities<'s> {
-        f: &'s dyn Fn(&SpawnEntities, Tree<Body>, &Rc<RefCell<EntityCommands>>),
+        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut EntityCommands),
     }
 
     impl SpawnEntities<'_> {
         /// Spawn a bevy entity for MuJoCo body
-        fn spawn_body(
+        fn spawn_body<'s>(
             &self,
-            entity_commands: &Rc<RefCell<EntityCommands>>,
+            entity_commands: &mut EntityCommands,
+            mut child_entity_commands: EntityCommands,
             body: &Body,
             geoms: &Vec<Geom>,
             settings: &Res<MuJoCoPluginSettings>,
             meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
             materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
-        ) -> i32 {
+        ) {
             let body_id = body.id;
             let geom = geoms.iter().find(|geom| geom.body_id == body_id).unwrap();
 
@@ -790,47 +832,51 @@ fn setup_mujoco(
             let mut meshes = meshes.borrow_mut();
             let mut materials = materials.borrow_mut();
 
-            let mut entity_commands = entity_commands.borrow_mut();
-
-            entity_commands
-                .commands()
-                .spawn(PbrBundle {
-                    mesh: meshes.add(mesh),
-                    material: materials.add(StandardMaterial {
-                        base_color: Color::rgba(
-                            geom.color[0],
-                            geom.color[1],
-                            geom.color[2],
-                            geom.color[3],
-                        ),
-                        ..default()
-                    }),
-                    transform: Transform {
-                        translation: body_transform.translation + geom_transform.translation,
-                        rotation: (body_transform.rotation * geom_transform.rotation)
-                            * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
-                            * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
-                        ..default()
-                    },
+            // let mut binding = entity_commands.borrow_mut();
+            let mut binding = entity_commands.commands().spawn(PbrBundle {
+                mesh: meshes.add(mesh),
+                material: materials.add(StandardMaterial {
+                    base_color: Color::rgba(
+                        geom.color[0],
+                        geom.color[1],
+                        geom.color[2],
+                        geom.color[3],
+                    ),
                     ..default()
-                })
+                }),
+                transform: Transform {
+                    translation: body_transform.translation + geom_transform.translation,
+                    rotation: (body_transform.rotation * geom_transform.rotation)
+                        * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+                        * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                    ..default()
+                },
+                ..default()
+            });
+
+            binding
                 .insert(MuJoCoBody { id: body_id })
                 .insert(Name::new(format!("MuJoCo::body_{}", body.name)));
 
-            body_id
+            // binding
+            // child_entity_commands = binding;
         }
     }
 
     let meshes = Rc::new(RefCell::new(meshes));
     let materials = Rc::new(RefCell::new(materials));
+    let commands = Rc::new(RefCell::new(commands));
 
     // closure implementation
     let spawn_entities = SpawnEntities {
         /// A function that spawn body into the current position in a tree
         f: &|func, mut body, entity_commands| {
             let root_leaf = body.data();
+            let mut commands = commands.borrow_mut();
+            let child_entity_commands = commands.spawn_empty();
             func.spawn_body(
                 entity_commands,
+                child_entity_commands,
                 root_leaf,
                 &geoms,
                 &settings,
@@ -838,7 +884,7 @@ fn setup_mujoco(
                 &materials,
             );
 
-            let mut entity_commands = entity_commands.borrow_mut();
+            // let mut entity_commands = entity_commands.borrow_mut();
 
             entity_commands.with_children(|children| loop {
                 let leaf = body.pop_back();
@@ -867,15 +913,19 @@ fn setup_mujoco(
         },
     };
 
+    let mut commands = commands.borrow_mut();
     // each mujoco body is defined as a tree
     for body in mujoco.body_tree() {
-        let entity_commands = Rc::new(RefCell::new(commands.spawn_empty()));
-        (spawn_entities.f)(&spawn_entities, body, &entity_commands);
+        let entity_commands = &mut commands.spawn_empty();
+        (spawn_entities.f)(&spawn_entities, body, entity_commands);
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::{assert_eq, assert_ne};
+    use ron::ser::{to_string_pretty, PrettyConfig};
+
     use super::*;
 
     #[test]
@@ -944,7 +994,7 @@ mod tests {
 ------FR_calf
 ";
 
-        assert!(tree_structure == exprected_tree_structure);
+        assert_eq!(tree_structure, exprected_tree_structure);
     }
 
     #[test]

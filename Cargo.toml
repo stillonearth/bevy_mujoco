@@ -11,7 +11,10 @@ mujoco-rs-sys = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev =
 mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "89affc5" }
 bevy_obj = "0.9.1"
 trees = "0.4.1"
+ron = "0.8"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 bevy-inspector-egui = { version = "0.14.0" }
 bevy_flycam = { git = "https://github.com/sburris0/bevy_flycam" }
+pretty_assertions = "1.2.1"
