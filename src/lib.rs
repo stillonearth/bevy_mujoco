@@ -750,12 +750,9 @@ fn setup_mujoco(
     materials: ResMut<Assets<StandardMaterial>>,
     settings: Res<MuJoCoPluginSettings>,
     mujoco: Res<MuJoCo>,
-    mut mjc_body_query: Query<(Entity, &MuJoCoBody)>,
 ) {
     let bodies = mujoco.bodies();
     let geoms = mujoco.geoms();
-
-    // commands.spawn(()).with_children(|_children| {});
 
     commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
@@ -764,21 +761,19 @@ fn setup_mujoco(
 
     // this is a closure that can call itself recursively
     struct SpawnEntities<'s> {
-        f: &'s dyn Fn(&SpawnEntities, Tree<Body>, i32),
+        f: &'s dyn Fn(&SpawnEntities, Tree<Body>, &Rc<RefCell<EntityCommands>>),
     }
 
     impl SpawnEntities<'_> {
         /// Spawn a bevy entity for MuJoCo body
         fn spawn_body(
             &self,
-            commands: &Rc<RefCell<Commands>>,
+            entity_commands: &Rc<RefCell<EntityCommands>>,
             body: &Body,
             geoms: &Vec<Geom>,
             settings: &Res<MuJoCoPluginSettings>,
             meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
             materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
-            mjc_body_query: &Rc<RefCell<Query<(Entity, &MuJoCoBody)>>>,
-            parent_id: i32,
         ) -> i32 {
             let body_id = body.id;
             let geom = geoms.iter().find(|geom| geom.body_id == body_id).unwrap();
@@ -795,15 +790,7 @@ fn setup_mujoco(
             let mut meshes = meshes.borrow_mut();
             let mut materials = materials.borrow_mut();
 
-            let mut mjc_body_query = mjc_body_query.borrow_mut();
-            let mut commands = commands.borrow_mut();
-            let mut entity_commands = commands.spawn_empty();
-            let parent_entity = mjc_body_query
-                .iter()
-                .find(|(_, mjc_body)| mjc_body.id == parent_id);
-            if parent_entity.is_some() {
-                entity_commands = commands.entity(parent_entity.unwrap().0);
-            }
+            let mut entity_commands = entity_commands.borrow_mut();
 
             entity_commands
                 .commands()
@@ -836,34 +823,22 @@ fn setup_mujoco(
 
     let meshes = Rc::new(RefCell::new(meshes));
     let materials = Rc::new(RefCell::new(materials));
-    let commands = Rc::new(RefCell::new(commands));
-    let mjc_body_query = Rc::new(RefCell::new(mjc_body_query));
 
     // closure implementation
     let spawn_entities = SpawnEntities {
         /// A function that spawn body into the current position in a tree
-        f: &|func, mut body, parent_id| {
+        f: &|func, mut body, entity_commands| {
             let root_leaf = body.data();
             func.spawn_body(
-                &commands,
+                entity_commands,
                 root_leaf,
                 &geoms,
                 &settings,
                 &meshes,
                 &materials,
-                &mjc_body_query,
-                parent_id,
             );
 
-            let mut mjc_body_query = mjc_body_query.borrow_mut();
-            let mut commands = commands.borrow_mut();
-            let mut entity_commands = commands.spawn_empty();
-            let parent_entity = mjc_body_query
-                .iter()
-                .find(|(_, mjc_body)| mjc_body.id == parent_id);
-            if parent_entity.is_some() {
-                entity_commands = commands.entity(parent_entity.unwrap().0);
-            }
+            let mut entity_commands = entity_commands.borrow_mut();
 
             entity_commands.with_children(|children| loop {
                 let leaf = body.pop_back();
@@ -894,7 +869,8 @@ fn setup_mujoco(
 
     // each mujoco body is defined as a tree
     for body in mujoco.body_tree() {
-        (spawn_entities.f)(&spawn_entities, body, 0);
+        let entity_commands = Rc::new(RefCell::new(commands.spawn_empty()));
+        (spawn_entities.f)(&spawn_entities, body, &entity_commands);
     }
 }
 
