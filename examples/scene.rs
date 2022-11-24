@@ -24,11 +24,11 @@ fn main() {
             model_assets_path: "assets/mujoco_menagerie/unitree_a1/assets/".to_string(),
         })
         .add_plugins(DefaultPlugins)
-        .add_plugin(PlayerPlugin)
-        .insert_resource(MovementSettings {
-            speed: 3.0,
-            ..default()
-        })
+        // .add_plugin(PlayerPlugin)
+        // .insert_resource(MovementSettings {
+        //     speed: 3.0,
+        //     ..default()
+        // })
         .add_plugin(MuJoCoPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)
