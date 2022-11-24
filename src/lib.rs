@@ -745,29 +745,21 @@ fn simulate_physics(
 }
 
 fn setup_mujoco(
-    world: &mut World,
-    // meshes: ResMut<Assets<Mesh>>,
-    // materials: ResMut<Assets<StandardMaterial>>,
-    // settings: Res<MuJoCoPluginSettings>,
-    // mujoco: Res<MuJoCo>,
-    // mut mjc_body_query: Query<(Entity, &MuJoCoBody)>,
+    mut commands: Commands,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
+    settings: Res<MuJoCoPluginSettings>,
+    mujoco: Res<MuJoCo>,
+    mut mjc_body_query: Query<(Entity, &MuJoCoBody)>,
 ) {
-    let mujoco = world.get_resource::<MuJoCo>().unwrap();
-    let settings = world.get_resource::<MuJoCoPluginSettings>().unwrap();
-    let meshes = world.get_resource_mut::<Assets<Mesh>>().unwrap();
-    let materials = world
-        .get_resource_mut::<Assets<StandardMaterial>>()
-        .unwrap();
-    let mut mjc_body_query = world.query::<(Entity, &MuJoCoBody)>();
-
     let bodies = mujoco.bodies();
     let geoms = mujoco.geoms();
 
     // commands.spawn(()).with_children(|_children| {});
 
-    world.insert_resource(MuJoCoResources {
+    commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
-        bodies,
+        bodies: bodies,
     });
 
     // this is a closure that can call itself recursively
@@ -779,13 +771,13 @@ fn setup_mujoco(
         /// Spawn a bevy entity for MuJoCo body
         fn spawn_body(
             &self,
-            world: &Rc<RefCell<&mut World>>,
+            commands: &Rc<RefCell<Commands>>,
             body: &Body,
             geoms: &Vec<Geom>,
-            settings: &MuJoCoPluginSettings,
-            meshes: &Assets<Mesh>,
-            materials: &Assets<StandardMaterial>,
-            mjc_body_query: &mut QueryState<(Entity, &MuJoCoBody)>,
+            settings: &Res<MuJoCoPluginSettings>,
+            meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
+            materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
+            mjc_body_query: &Rc<RefCell<Query<(Entity, &MuJoCoBody)>>>,
             parent_id: i32,
         ) -> i32 {
             let body_id = body.id;
@@ -793,7 +785,6 @@ fn setup_mujoco(
 
             // Extracting mesh from mujoco object doesn't work correctly
             // Insted load the obj directly with `bevy_obj`
-            // let settings = settings.borrow();
             let mesh = geom.mesh(settings.model_assets_path.clone());
 
             let body_transform = body.transform();
@@ -801,51 +792,52 @@ fn setup_mujoco(
 
             // deref
             // let mut entity_commands = entity_commands.borrow_mut();
-            // let mut meshes = meshes.borrow_mut();
-            // let mut materials = materials.borrow_mut();
-            // let mjc_body_query = mjc_body_query.borrow_mut();
-            let mut world = world.borrow_mut();
+            let mut meshes = meshes.borrow_mut();
+            let mut materials = materials.borrow_mut();
 
-            let mut entity_commands = world.spawn_empty();
+            let mut mjc_body_query = mjc_body_query.borrow_mut();
+            let mut commands = commands.borrow_mut();
+            let mut entity_commands = commands.spawn_empty();
             let parent_entity = mjc_body_query
-                .iter(&world)
+                .iter()
                 .find(|(_, mjc_body)| mjc_body.id == parent_id);
             if parent_entity.is_some() {
-                entity_commands = world.entity_mut(parent_entity.unwrap().0);
+                entity_commands = commands.entity(parent_entity.unwrap().0);
             }
 
-            entity_commands.with_children(|children| {
-                children
-                    .spawn(PbrBundle {
-                        mesh: meshes.add(mesh),
-                        material: materials.add(StandardMaterial {
-                            base_color: Color::rgba(
-                                geom.color[0],
-                                geom.color[1],
-                                geom.color[2],
-                                geom.color[3],
-                            ),
-                            ..default()
-                        }),
-                        transform: Transform {
-                            translation: body_transform.translation + geom_transform.translation,
-                            rotation: (body_transform.rotation * geom_transform.rotation)
-                                * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
-                                * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
-                            ..default()
-                        },
+            entity_commands
+                .commands()
+                .spawn(PbrBundle {
+                    mesh: meshes.add(mesh),
+                    material: materials.add(StandardMaterial {
+                        base_color: Color::rgba(
+                            geom.color[0],
+                            geom.color[1],
+                            geom.color[2],
+                            geom.color[3],
+                        ),
                         ..default()
-                    })
-                    .insert(MuJoCoBody { id: body_id })
-                    .insert(Name::new(format!("MuJoCo::body_{}", body.name)));
-            });
+                    }),
+                    transform: Transform {
+                        translation: body_transform.translation + geom_transform.translation,
+                        rotation: (body_transform.rotation * geom_transform.rotation)
+                            * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+                            * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                        ..default()
+                    },
+                    ..default()
+                })
+                .insert(MuJoCoBody { id: body_id })
+                .insert(Name::new(format!("MuJoCo::body_{}", body.name)));
 
             body_id
         }
     }
 
-    let world = Rc::new(RefCell::new(world));
-    // let mjc_body_query = Rc::new(RefCell::new(mjc_body_query));
+    let meshes = Rc::new(RefCell::new(meshes));
+    let materials = Rc::new(RefCell::new(materials));
+    let commands = Rc::new(RefCell::new(commands));
+    let mjc_body_query = Rc::new(RefCell::new(mjc_body_query));
 
     // closure implementation
     let spawn_entities = SpawnEntities {
@@ -853,26 +845,26 @@ fn setup_mujoco(
         f: &|func, mut body, parent_id| {
             let root_leaf = body.data();
             func.spawn_body(
-                &world,
+                &commands,
                 root_leaf,
                 &geoms,
                 &settings,
                 &meshes,
                 &materials,
-                &mut mjc_body_query,
+                &mjc_body_query,
                 parent_id,
             );
 
-            let mut world = world.borrow_mut();
-            let mut entity_commands = world.spawn_empty();
+            let mut mjc_body_query = mjc_body_query.borrow_mut();
+            let mut commands = commands.borrow_mut();
+            let mut entity_commands = commands.spawn_empty();
             let parent_entity = mjc_body_query
-                .iter(&world)
+                .iter()
                 .find(|(_, mjc_body)| mjc_body.id == parent_id);
             if parent_entity.is_some() {
-                entity_commands = world.entity_mut(parent_entity.unwrap().0);
+                entity_commands = commands.entity(parent_entity.unwrap().0);
             }
 
-            // let mut entity_commands = entity_commands.borrow_mut();
             entity_commands.with_children(|children| loop {
                 let leaf = body.pop_back();
                 if leaf.is_none() {
@@ -880,18 +872,18 @@ fn setup_mujoco(
                 }
 
                 // spawn cube
-                // children
-                //     .spawn(PbrBundle {
-                //         mesh: meshes
-                //             .borrow_mut()
-                //             .add(Mesh::from(shape::Cube { size: 0.1 })),
-                //         material: materials.borrow_mut().add(StandardMaterial {
-                //             base_color: Color::rgb(0.8, 0.8, 0.8),
-                //             ..default()
-                //         }),
-                //         ..default()
-                //     })
-                //     .insert(Name::new("Cube"));
+                children
+                    .spawn(PbrBundle {
+                        mesh: meshes
+                            .borrow_mut()
+                            .add(Mesh::from(shape::Cube { size: 0.1 })),
+                        material: materials.borrow_mut().add(StandardMaterial {
+                            base_color: Color::rgb(0.8, 0.8, 0.8),
+                            ..default()
+                        }),
+                        ..default()
+                    })
+                    .insert(Name::new("Cube"));
 
                 // let entity_commands = children.spawn(());
                 // let entity_commands = Rc::new(RefCell::new(entity_commands));
