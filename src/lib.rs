@@ -810,7 +810,6 @@ fn setup_mujoco(
         fn spawn_body<'s>(
             &self,
             entity_commands: &mut EntityCommands,
-            mut child_entity_commands: EntityCommands,
             body: &Body,
             geoms: &Vec<Geom>,
             settings: &Res<MuJoCoPluginSettings>,
@@ -872,11 +871,10 @@ fn setup_mujoco(
         /// A function that spawn body into the current position in a tree
         f: &|func, mut body, entity_commands| {
             let root_leaf = body.data();
-            let mut commands = commands.borrow_mut();
-            let child_entity_commands = commands.spawn_empty();
+            // TODO: spawn_body inserts a new entity and return a cursor to a leaf in a tree
+            // It does not return entity_commands
             func.spawn_body(
                 entity_commands,
-                child_entity_commands,
                 root_leaf,
                 &geoms,
                 &settings,
@@ -884,31 +882,19 @@ fn setup_mujoco(
                 &materials,
             );
 
-            // let mut entity_commands = entity_commands.borrow_mut();
-
             entity_commands.with_children(|children| loop {
                 let leaf = body.pop_back();
                 if leaf.is_none() {
                     break;
                 }
 
-                // spawn cube
-                children
-                    .spawn(PbrBundle {
-                        mesh: meshes
-                            .borrow_mut()
-                            .add(Mesh::from(shape::Cube { size: 0.1 })),
-                        material: materials.borrow_mut().add(StandardMaterial {
-                            base_color: Color::rgb(0.8, 0.8, 0.8),
-                            ..default()
-                        }),
-                        ..default()
-                    })
-                    .insert(Name::new("Cube"));
+                // ---
+                // spawn_body should return entity_commands
+                // entity_commands is supposted to point to a position in entity tree
+                // ---
 
-                // let entity_commands = children.spawn(());
-                // let entity_commands = Rc::new(RefCell::new(entity_commands));
-                // (func.f)(func, leaf, &entity_commands);
+                let mut entity_commands = children.spawn_empty();
+                (func.f)(func, BodyTree(leaf.unwrap()), &mut entity_commands);
             });
         },
     };
