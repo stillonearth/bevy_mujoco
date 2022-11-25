@@ -787,8 +787,8 @@ fn simulate_physics(
 
 fn setup_mujoco(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<StandardMaterial>>,
     settings: Res<MuJoCoPluginSettings>,
     mujoco: Res<MuJoCo>,
 ) {
@@ -807,6 +807,7 @@ fn setup_mujoco(
 
     impl SpawnEntities<'_> {
         /// Spawn a bevy entity for MuJoCo body
+        #[allow(clippy::too_many_arguments)]
         fn spawn_body(
             &self,
             child_builder: &mut ChildBuilder,
@@ -902,7 +903,7 @@ fn setup_mujoco(
                 &settings,
                 &meshes,
                 &materials,
-                &add_children,
+                add_children,
             );
         },
     };
