@@ -742,13 +742,11 @@ fn simulate_physics(
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
     mujoco_resources: Res<MuJoCoResources>,
 ) {
-    return;
-
     // Target 60 fps in simulation
-    let _sim_start = mujoco.time();
-    // while mujoco.time() - sim_start < 1.0 / 60.0 {
-    //     mujoco.step();
-    // }
+    let sim_start = mujoco.time();
+    while mujoco.time() - sim_start < 1.0 / 60.0 {
+        mujoco.step();
+    }
 
     let positions = mujoco.xpos();
     let rotations = mujoco.xquat();
@@ -767,9 +765,11 @@ fn simulate_physics(
         let _body_translation = Vec3::from_array(mujoco_resources.bodies[body_id].pos);
 
         transform.translation = geom_translation + dynamic_translation;
-        // if let GeomType::PLANE = mujoco_resources.geoms[body_id].geom_type {
-        //     transform.translation.y += mujoco_resources.geoms[body_id].size[1];
-        // }
+
+        // in mujoco plane's offset is lower face, in bevy it's top
+        if let GeomType::PLANE = mujoco_resources.geoms[body_id].geom_type {
+            transform.translation.y += mujoco_resources.geoms[body_id].size[1];
+        }
 
         let dynamic_rotation = Quat::from_xyzw(rot[0], rot[1], rot[2], rot[3]);
         let body_rotation = Quat::from_xyzw(
@@ -787,8 +787,8 @@ fn simulate_physics(
 
 fn setup_mujoco(
     mut commands: Commands,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: ResMut<Assets<StandardMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     settings: Res<MuJoCoPluginSettings>,
     mujoco: Res<MuJoCo>,
 ) {
@@ -797,24 +797,25 @@ fn setup_mujoco(
 
     commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
-        bodies: bodies,
+        bodies,
     });
 
     // this is a closure that can call itself recursively
     struct SpawnEntities<'s> {
-        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut EntityCommands),
+        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut ChildBuilder),
     }
 
     impl SpawnEntities<'_> {
         /// Spawn a bevy entity for MuJoCo body
-        fn spawn_body<'s>(
+        fn spawn_body(
             &self,
-            entity_commands: &mut EntityCommands,
+            child_builder: &mut ChildBuilder,
             body: &Body,
-            geoms: &Vec<Geom>,
+            geoms: &[Geom],
             settings: &Res<MuJoCoPluginSettings>,
             meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
             materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
+            add_children: impl FnOnce(&mut ChildBuilder),
         ) {
             let body_id = body.id;
             let geom = geoms.iter().find(|geom| geom.body_id == body_id).unwrap();
@@ -826,36 +827,45 @@ fn setup_mujoco(
             let body_transform = body.transform();
             let geom_transform = geom.clone().transform();
 
+            println!("spawn body: {} {}", body.id, body.name);
+
             // deref
             // let mut entity_commands = entity_commands.borrow_mut();
-            let mut meshes = meshes.borrow_mut();
-            let mut materials = materials.borrow_mut();
+            let mut binding: EntityCommands;
+            {
+                let mut materials = materials.borrow_mut();
+                let mut meshes = meshes.borrow_mut();
 
-            // let mut binding = entity_commands.borrow_mut();
-            let mut binding = entity_commands.commands().spawn(PbrBundle {
-                mesh: meshes.add(mesh),
-                material: materials.add(StandardMaterial {
-                    base_color: Color::rgba(
-                        geom.color[0],
-                        geom.color[1],
-                        geom.color[2],
-                        geom.color[3],
-                    ),
+                // let mut binding = entity_commands.borrow_mut();
+                binding = child_builder.spawn(PbrBundle {
+                    mesh: meshes.add(mesh),
+                    material: materials.add(StandardMaterial {
+                        base_color: Color::rgba(
+                            geom.color[0],
+                            geom.color[1],
+                            geom.color[2],
+                            geom.color[3],
+                        ),
+                        ..default()
+                    }),
+                    transform: Transform {
+                        translation: body_transform.translation + geom_transform.translation,
+                        // TODO: Unsure about this series of rotations.
+                        // otherwise robot is turned 90 degrees on X and Y axis
+                        rotation: (body_transform.rotation * geom_transform.rotation)
+                            * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
+                            * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                        ..default()
+                    },
                     ..default()
-                }),
-                transform: Transform {
-                    translation: body_transform.translation + geom_transform.translation,
-                    rotation: (body_transform.rotation * geom_transform.rotation)
-                        * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
-                        * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
-                    ..default()
-                },
-                ..default()
-            });
+                });
+            }
 
             binding
                 .insert(MuJoCoBody { id: body_id })
                 .insert(Name::new(format!("MuJoCo::body_{}", body.name)));
+
+            binding.with_children(add_children);
 
             // binding
             // child_entity_commands = binding;
@@ -869,48 +879,48 @@ fn setup_mujoco(
     // closure implementation
     let spawn_entities = SpawnEntities {
         /// A function that spawn body into the current position in a tree
-        f: &|func, mut body, entity_commands| {
+        f: &|func, body, child_builder| {
             let root_leaf = body.data();
             // TODO: spawn_body inserts a new entity and return a cursor to a leaf in a tree
             // It does not return entity_commands
+
+            let add_children = |child_builder: &mut ChildBuilder| {
+                let mut body = body.clone();
+                loop {
+                    let leaf = body.pop_back();
+                    if leaf.is_none() {
+                        return;
+                    }
+                    (func.f)(func, BodyTree(leaf.unwrap()), child_builder);
+                }
+            };
+
             func.spawn_body(
-                entity_commands,
+                child_builder,
                 root_leaf,
                 &geoms,
                 &settings,
                 &meshes,
                 &materials,
+                &add_children,
             );
-
-            entity_commands.with_children(|children| loop {
-                let leaf = body.pop_back();
-                if leaf.is_none() {
-                    break;
-                }
-
-                // ---
-                // spawn_body should return entity_commands
-                // entity_commands is supposted to point to a position in entity tree
-                // ---
-
-                let mut entity_commands = children.spawn_empty();
-                (func.f)(func, BodyTree(leaf.unwrap()), &mut entity_commands);
-            });
         },
     };
 
     let mut commands = commands.borrow_mut();
     // each mujoco body is defined as a tree
-    for body in mujoco.body_tree() {
-        let entity_commands = &mut commands.spawn_empty();
-        (spawn_entities.f)(&spawn_entities, body, entity_commands);
-    }
+    commands
+        .spawn(Name::new("MuJoCo::world"))
+        .with_children(|child_builder| {
+            for body in mujoco.body_tree() {
+                (spawn_entities.f)(&spawn_entities, body, child_builder);
+            }
+        });
 }
 
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::{assert_eq, assert_ne};
-    use ron::ser::{to_string_pretty, PrettyConfig};
+    use pretty_assertions::assert_eq;
 
     use super::*;
 

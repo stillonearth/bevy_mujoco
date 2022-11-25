@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_flycam::{MovementSettings, PlayerPlugin};
+
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_mujoco::{MuJoCoPlugin, MuJoCoPluginSettings};
 
