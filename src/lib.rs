@@ -84,23 +84,29 @@ pub struct Geom {
     pub name: String,
     pub geom_type: GeomType,
     pub body_id: i32,
-    pub parent_id: i32,
-    pub pos: [f32; 3],
-    pub quat: [f32; 4],
-    pub size: [f32; 3],
+    pub pos: [f64; 3],
+    pub quat: [f64; 4],
+    pub size: [f64; 3],
     pub color: [f32; 4],
     pub mesh: Option<MuJoCoMesh>,
+    pub geom_group: i32,
 }
 
 impl Geom {
     /// Get bevy mesh for the body
     pub fn mesh(&self, assets_path: String) -> Mesh {
         match self.geom_type {
-            GeomType::PLANE => Mesh::from(shape::Box::new(
-                self.size[0] as f32,
-                self.size[1] as f32,
-                self.size[2] as f32,
-            )),
+            GeomType::PLANE => {
+                let plane_size = if self.size[0] > 0.0 {
+                    self.size[0]
+                } else {
+                    // MuJoCo size 0 means infinite
+                    10.0
+                };
+                Mesh::from(shape::Plane {
+                    size: plane_size as f32,
+                })
+            }
             GeomType::BOX => Mesh::from(shape::Box::new(
                 self.size[0] as f32,
                 self.size[1] as f32,
@@ -130,11 +136,28 @@ impl Geom {
     }
 
     pub fn rotation(&self) -> Quat {
-        Quat::from_xyzw(self.quat[0], self.quat[1], self.quat[2], self.quat[3])
+        Quat::from_xyzw(
+            self.quat[0] as f32,
+            self.quat[1] as f32,
+            self.quat[2] as f32,
+            self.quat[3] as f32,
+        )
+    }
+
+    /// bevy and mujoco treat object frame differently, this function converts
+    pub fn translation_correction(&self) -> Vec3 {
+        match self.geom_type {
+            GeomType::BOX => Vec3::new(0.0, (self.size[1] / 2.0) as f32, 0.0),
+            GeomType::SPHERE => Vec3::new(0.0, (self.size[0] * 2.0) as f32, 0.0),
+            GeomType::CAPSULE => Vec3::new(0.0, (self.size[1] * 2.0) as f32, 0.0),
+            GeomType::CYLINDER => Vec3::new(0.0, (self.size[2] * 2.0) as f32, 0.0),
+            _ => Vec3::ZERO,
+        }
     }
 
     pub fn translation(&self) -> Vec3 {
-        Vec3::new(self.pos[0], self.pos[1], self.pos[2])
+        let trans = Vec3::new(self.pos[0] as f32, self.pos[1] as f32, self.pos[2] as f32);
+        trans - self.translation_correction()
     }
 
     pub fn transform(&self) -> Transform {
@@ -154,23 +177,26 @@ pub struct Body {
     pub root_id: i32,
     pub geom_n: i32,
     pub simple: u8,
-    pub pos: [f32; 3],
-    pub quat: [f32; 4],
+    pub pos: [f64; 3],
+    pub quat: [f64; 4],
     pub mass: f32,
 }
 
 impl Body {
     pub fn rotation(&self) -> Quat {
-        Quat::from_xyzw(self.quat[0], self.quat[1], self.quat[2], self.quat[3])
+        Quat::from_xyzw(
+            self.quat[0] as f32,
+            self.quat[1] as f32,
+            self.quat[2] as f32,
+            self.quat[3] as f32,
+        )
     }
 
     pub fn translation(&self) -> Vec3 {
-        Vec3::new(self.pos[0], self.pos[1], self.pos[2])
+        Vec3::new(self.pos[0] as f32, self.pos[1] as f32, self.pos[2] as f32)
     }
 
     pub fn transform(&self) -> Transform {
-        // print!("{:?}", self.rotation());
-
         Transform {
             translation: self.translation(),
             rotation: self.rotation() * self.rotation(),
@@ -215,11 +241,15 @@ impl MuJoCoMesh {
 pub struct Local<T>(T);
 
 pub trait LocalFloat {
+    fn to_f64(&self) -> f64;
     fn to_f32(&self) -> f32;
 }
 impl LocalFloat for Local<f32> {
     fn to_f32(&self) -> f32 {
         self.0
+    }
+    fn to_f64(&self) -> f64 {
+        self.0 as f64
     }
 }
 
@@ -227,11 +257,9 @@ impl LocalFloat for Local<f64> {
     fn to_f32(&self) -> f32 {
         self.0 as f32
     }
-}
 
-impl LocalFloat for Local<i32> {
-    fn to_f32(&self) -> f32 {
-        self.0 as f32
+    fn to_f64(&self) -> f64 {
+        self.0 as f64
     }
 }
 
@@ -279,7 +307,26 @@ impl Serialize for BodyTree {
 }
 
 /// Copy MuJoCo array into Vec<f64>
-fn extract_vector_float<T>(vec: *mut T, element_size: usize, n_entries: usize) -> Vec<f32>
+fn extract_vector_float_f64<T>(vec: *mut T, element_size: usize, n_entries: usize) -> Vec<f64>
+where
+    T: LocalFloat,
+{
+    let mut result_vec: Vec<f64> = Vec::new();
+
+    unsafe {
+        let entries = vec;
+        for i in 0..n_entries {
+            for j in 0..element_size {
+                result_vec.push((*entries.add(i * element_size + j)).to_f64());
+            }
+        }
+    }
+
+    result_vec
+}
+
+/// Copy MuJoCo array into Vec<f64>
+fn extract_vector_float_f32<T>(vec: *mut T, element_size: usize, n_entries: usize) -> Vec<f32>
 where
     T: LocalFloat,
 {
@@ -317,7 +364,7 @@ fn extract_mesh_attribute(array: *mut f32, offset: usize, count: usize) -> Vec<[
     let mut points: Vec<[f32; 3]> = vec![];
 
     let point_array =
-        unsafe { extract_vector_float(array.add(offset) as *mut Local<f32>, 3, count) };
+        unsafe { extract_vector_float_f32(array.add(offset) as *mut Local<f32>, 3, count) };
     for p in point_array.chunks(3) {
         let p: [f32; 3] = p.try_into().unwrap();
         points.push(p);
@@ -341,7 +388,7 @@ fn extract_indices(array: *mut i32, face_addr: usize, face_num: usize) -> Vec<u3
 }
 
 /// Adjust format of 3-Vec from Mujoco to bevy
-fn replace_values_vec3(arr: &mut [f32; 3], i1: usize, i2: usize) {
+fn replace_values_vec3(arr: &mut [f64; 3], i1: usize, i2: usize) {
     let c_1 = arr[i1];
     let c_2 = arr[i2];
     arr[i1] = c_2;
@@ -349,7 +396,7 @@ fn replace_values_vec3(arr: &mut [f32; 3], i1: usize, i2: usize) {
 }
 
 /// Adjust format of quaternion from Mujoco to bevy
-fn replace_values_vec4(arr: &mut [f32; 4], i1: usize, i2: usize) {
+fn replace_values_vec4(arr: &mut [f64; 4], i1: usize, i2: usize) {
     let c_1 = arr[i1];
     let c_2 = arr[i2];
     arr[i1] = c_2;
@@ -386,16 +433,16 @@ impl MuJoCo {
     }
 
     /// Returns positions of bodies
-    pub fn xpos(&self) -> Vec<[f32; 3]> {
+    pub fn xpos(&self) -> Vec<[f64; 3]> {
         let mj_data = self.mj_data.0;
         let raw_vec = unsafe { (*mj_data).xpos };
 
-        let raw_xpos = extract_vector_float(raw_vec as *mut Local<f64>, 3, self.ngeom());
+        let raw_xpos = extract_vector_float_f64(raw_vec as *mut Local<f64>, 3, self.ngeom());
 
-        let mut xpos: Vec<[f32; 3]> = Vec::new();
+        let mut xpos: Vec<[f64; 3]> = Vec::new();
 
         for i in 0..self.ngeom() {
-            let entry: [f32; 3] = [raw_xpos[i * 3], raw_xpos[i * 3 + 1], raw_xpos[i * 3 + 2]];
+            let entry: [f64; 3] = [raw_xpos[i * 3], raw_xpos[i * 3 + 2], raw_xpos[i * 3 + 1]];
             xpos.push(entry);
         }
 
@@ -403,14 +450,14 @@ impl MuJoCo {
     }
 
     /// Returns rotations of bodies
-    pub fn xquat(&self) -> Vec<[f32; 4]> {
+    pub fn xquat(&self) -> Vec<[f64; 4]> {
         let mj_data = self.mj_data.0;
         let raw_vec = unsafe { (*mj_data).xquat };
-        let raw_quat = extract_vector_float(raw_vec as *mut Local<f64>, 4, self.ngeom());
-        let mut xquat: Vec<[f32; 4]> = Vec::new();
+        let raw_quat = extract_vector_float_f64(raw_vec as *mut Local<f64>, 4, self.ngeom());
+        let mut xquat: Vec<[f64; 4]> = Vec::new();
 
         for i in 0..self.ngeom() {
-            let entry: [f32; 4] = [
+            let entry: [f64; 4] = [
                 raw_quat[i * 4 + 3],
                 raw_quat[i * 4 + 1],
                 raw_quat[i * 4 + 2],
@@ -546,35 +593,41 @@ impl MuJoCo {
         let mut geoms: Vec<Geom> = Vec::new();
         let meshes = self.meshes();
 
-        let body_pos_vec: Vec<f32> =
-            extract_vector_float(mj_model.geom_pos as *mut Local<f64>, 3, n_geom);
-        let body_quat_vec: Vec<f32> =
-            extract_vector_float(mj_model.geom_quat as *mut Local<f64>, 4, n_geom);
-        let body_size_vec: Vec<f32> =
-            extract_vector_float(mj_model.geom_size as *mut Local<f64>, 4, n_geom);
-        let body_rgba_vec: Vec<f32> =
-            extract_vector_float(mj_model.geom_rgba as *mut Local<f32>, 4, n_geom);
+        let body_pos_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.geom_pos as *mut Local<f64>, 3, n_geom);
+        let body_quat_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.geom_quat as *mut Local<f64>, 4, n_geom);
+        let body_size_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.geom_size as *mut Local<f64>, 4, n_geom);
+        let body_rgba_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.geom_rgba as *mut Local<f32>, 4, n_geom);
 
         for i in 0..n_geom {
             // position
             let pos_array = body_pos_vec[i * 3..i * 3 + 3].to_vec();
-            let pos_array: ArrayVec<f32, 3> = pos_array.into_iter().collect();
-            let pos_array: [f32; 3] = pos_array.into_inner().unwrap();
+            let pos_array: ArrayVec<f64, 3> = pos_array.into_iter().collect();
+            let mut pos_array: [f64; 3] = pos_array.into_inner().unwrap();
 
             // quaternion
             let quat_array = body_quat_vec[i * 4..i * 4 + 4].to_vec();
-            let quat_array: ArrayVec<f32, 4> = quat_array.into_iter().collect();
-            let quat_array: [f32; 4] = quat_array.into_inner().unwrap();
+            let quat_array: ArrayVec<f64, 4> = quat_array.into_iter().collect();
+            let quat_array: [f64; 4] = quat_array.into_inner().unwrap();
 
             // size
             let size_array = body_size_vec[i * 3..i * 3 + 3].to_vec();
-            let size_array: ArrayVec<f32, 3> = size_array.into_iter().collect();
-            let size_array: [f32; 3] = size_array.into_inner().unwrap();
+            let size_array: ArrayVec<f64, 3> = size_array.into_iter().collect();
+            let size_array: [f64; 3] = size_array.into_inner().unwrap();
 
             // color
             let color_array = body_rgba_vec[i * 4..i * 4 + 4].to_vec();
-            let color_array: ArrayVec<f32, 4> = color_array.into_iter().collect();
-            let color_array: [f32; 4] = color_array.into_inner().unwrap();
+            let color_array: ArrayVec<f64, 4> = color_array.into_iter().collect();
+            let color_array: [f64; 4] = color_array.into_inner().unwrap();
+            let color_array: [f32; 4] = [
+                color_array[0] as f32,
+                color_array[1] as f32,
+                color_array[2] as f32,
+                color_array[3] as f32,
+            ];
 
             let mut mesh: Option<MuJoCoMesh> = None;
             let mesh_id = unsafe { *mj_model.geom_dataid.add(i) };
@@ -590,7 +643,7 @@ impl MuJoCo {
                     id: i as i32,
                     geom_type: GeomType::from::<usize>(*mj_model.geom_type.add(i) as usize),
                     body_id: *mj_model.geom_bodyid.add(i) as i32,
-                    parent_id: *mj_model.body_parentid.add(i) as i32,
+                    geom_group: *mj_model.geom_group.add(i) as i32,
                     pos: pos_array,
                     quat: quat_array,
                     size: size_array,
@@ -606,6 +659,9 @@ impl MuJoCo {
             replace_values_vec3(&mut geom_body.size, 1, 2);
             replace_values_vec4(&mut geom_body.quat, 0, 3);
 
+            // bevy's origin lower face while mujoco's origin is upper face
+            pos_array[2] -= size_array[2];
+
             geoms.push(geom_body);
         }
         geoms
@@ -617,22 +673,22 @@ impl MuJoCo {
         let mj_model = unsafe { *mj_model.ptr() };
         let n_body = self.nbody();
 
-        let body_pos_vec: Vec<f32> =
-            extract_vector_float(mj_model.body_pos as *mut Local<f64>, 3, n_body);
-        let body_quat_vec: Vec<f32> =
-            extract_vector_float(mj_model.body_quat as *mut Local<f64>, 4, n_body);
+        let body_pos_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.body_pos as *mut Local<f64>, 3, n_body);
+        let body_quat_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.body_quat as *mut Local<f64>, 4, n_body);
 
         let mut bodies: Vec<Body> = Vec::new();
         for i in 0..n_body {
             // position
             let pos_array = body_pos_vec[i * 3..i * 3 + 3].to_vec();
-            let pos_array: ArrayVec<f32, 3> = pos_array.into_iter().collect();
-            let pos_array: [f32; 3] = pos_array.into_inner().unwrap();
+            let pos_array: ArrayVec<f64, 3> = pos_array.into_iter().collect();
+            let pos_array: [f64; 3] = pos_array.into_inner().unwrap();
 
             // quaternion
             let quat_array = body_quat_vec[i * 4..i * 4 + 4].to_vec();
-            let quat_array: ArrayVec<f32, 4> = quat_array.into_iter().collect();
-            let quat_array: [f32; 4] = quat_array.into_inner().unwrap();
+            let quat_array: ArrayVec<f64, 4> = quat_array.into_iter().collect();
+            let quat_array: [f64; 4] = quat_array.into_inner().unwrap();
 
             // metadata
             let name_idx = unsafe { *mj_model.name_bodyadr.add(i) as usize };
@@ -713,6 +769,7 @@ impl MuJoCo {
 pub struct MuJoCoPluginSettings {
     pub model_xml_path: String,
     pub model_assets_path: String,
+    pub pause_simulation: bool,
 }
 
 #[derive(Resource)]
@@ -734,14 +791,16 @@ impl Plugin for MuJoCoPlugin {
     }
 }
 
-#[allow(unused_mut)]
-#[allow(unused_variables)]
-#[allow(unreachable_code)]
 fn simulate_physics(
     mujoco: ResMut<MuJoCo>,
+    settings: Res<MuJoCoPluginSettings>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
     mujoco_resources: Res<MuJoCoResources>,
 ) {
+    if settings.pause_simulation {
+        return;
+    }
+
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
     while mujoco.time() - sim_start < 1.0 / 60.0 {
@@ -760,23 +819,29 @@ fn simulate_physics(
         let pos = positions[body_id];
         let rot = rotations[body_id];
 
-        let dynamic_translation = Vec3::from_array(pos);
-        let geom_translation = Vec3::from_array(mujoco_resources.geoms[body_id].pos);
-        let _body_translation = Vec3::from_array(mujoco_resources.bodies[body_id].pos);
+        let dynamic_translation = Vec3::new(pos[0] as f32, pos[1] as f32, pos[2] as f32);
+        let body = mujoco_resources.bodies[body_id].clone();
+        let body_id = body.id;
+        let predicate = mujoco_resources.geoms.iter().filter(|geom| {
+            geom.body_id == body_id && (geom.geom_group == 2 || geom.geom_group == 0)
+        });
+        assert_eq!(predicate.clone().count(), 1);
+        let geom = predicate.last().unwrap();
 
-        transform.translation = geom_translation + dynamic_translation;
+        // let geom_translation =
+        //     Vec3::new(geom.pos[0] as f32, geom.pos[1] as f32, geom.pos[2] as f32);
+        // let body_translation =
+        //     Vec3::new(body.pos[0] as f32, body.pos[1] as f32, body.pos[2] as f32);
 
-        // in mujoco plane's offset is lower face, in bevy it's top
-        if let GeomType::PLANE = mujoco_resources.geoms[body_id].geom_type {
-            transform.translation.y += mujoco_resources.geoms[body_id].size[1];
-        }
+        transform.translation = dynamic_translation - geom.translation_correction();
 
-        let dynamic_rotation = Quat::from_xyzw(rot[0], rot[1], rot[2], rot[3]);
+        let dynamic_rotation =
+            Quat::from_xyzw(rot[0] as f32, rot[1] as f32, rot[2] as f32, rot[3] as f32);
         let body_rotation = Quat::from_xyzw(
-            mujoco_resources.geoms[body_id].quat[0],
-            mujoco_resources.geoms[body_id].quat[1],
-            mujoco_resources.geoms[body_id].quat[2],
-            mujoco_resources.geoms[body_id].quat[3],
+            body.quat[0] as f32,
+            body.quat[1] as f32,
+            body.quat[2] as f32,
+            body.quat[3] as f32,
         );
 
         let simulation_rotation = body_rotation * dynamic_rotation;
@@ -819,16 +884,17 @@ fn setup_mujoco(
             add_children: impl FnOnce(&mut ChildBuilder),
         ) {
             let body_id = body.id;
-            let geom = geoms.iter().find(|geom| geom.body_id == body_id).unwrap();
-
+            let predicate = geoms.iter().filter(|geom| {
+                geom.body_id == body_id && (geom.geom_group == 2 || geom.geom_group == 0)
+            });
+            assert_eq!(predicate.clone().count(), 1);
+            let geom = predicate.last().unwrap();
             // Extracting mesh from mujoco object doesn't work correctly
             // Insted load the obj directly with `bevy_obj`
             let mesh = geom.mesh(settings.model_assets_path.clone());
 
             let body_transform = body.transform();
             let geom_transform = geom.clone().transform();
-
-            println!("spawn body: {} {}", body.id, body.name);
 
             // deref
             // let mut entity_commands = entity_commands.borrow_mut();
@@ -851,11 +917,7 @@ fn setup_mujoco(
                     }),
                     transform: Transform {
                         translation: body_transform.translation + geom_transform.translation,
-                        // TODO: Unsure about this series of rotations.
-                        // otherwise robot is turned 90 degrees on X and Y axis
-                        rotation: (body_transform.rotation * geom_transform.rotation)
-                            * Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2)
-                            * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2),
+                        rotation: body_transform.rotation * geom_transform.rotation,
                         ..default()
                     },
                     ..default()
@@ -911,10 +973,11 @@ fn setup_mujoco(
     let mut commands = commands.borrow_mut();
     // each mujoco body is defined as a tree
     commands
-        .spawn(Name::new("MuJoCo::world"))
+        .spawn((Name::new("MuJoCo::world"), SpatialBundle::default()))
         .with_children(|child_builder| {
             for body in mujoco.body_tree() {
                 (spawn_entities.f)(&spawn_entities, body, child_builder);
+                // return;
             }
         });
 }

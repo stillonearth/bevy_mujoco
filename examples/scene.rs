@@ -1,7 +1,7 @@
 use bevy::prelude::*;
-
-use bevy_inspector_egui::WorldInspectorPlugin;
-use bevy_mujoco::{MuJoCoPlugin, MuJoCoPluginSettings};
+use bevy_flycam::*;
+use bevy_inspector_egui::*;
+use bevy_mujoco::*;
 
 fn setup(mut commands: Commands) {
     commands.spawn(PointLightBundle {
@@ -14,21 +14,30 @@ fn setup(mut commands: Commands) {
         transform: Transform::from_xyz(8.0, 16.0, 8.0),
         ..default()
     });
+
+    commands
+        .spawn(Camera3dBundle {
+            transform: Transform::from_xyz(2.0, 2.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..default()
+        })
+        .insert(FlyCam);
 }
 
 fn main() {
     App::new()
-        .insert_resource(ClearColor(Color::WHITE))
+        .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(MuJoCoPluginSettings {
-            model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
+            model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
+            // model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             model_assets_path: "assets/mujoco_menagerie/unitree_a1/assets/".to_string(),
+            pause_simulation: false,
         })
         .add_plugins(DefaultPlugins)
-        // .add_plugin(PlayerPlugin)
-        // .insert_resource(MovementSettings {
-        //     speed: 3.0,
-        //     ..default()
-        // })
+        .add_plugin(NoCameraPlayerPlugin)
+        .insert_resource(MovementSettings {
+            speed: 3.0,
+            ..default()
+        })
         .add_plugin(MuJoCoPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)
