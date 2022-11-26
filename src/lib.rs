@@ -81,7 +81,7 @@ fn simulate_physics(
         // let body_translation =
         //     Vec3::new(body.pos[0] as f32, body.pos[1] as f32, body.pos[2] as f32);
 
-        transform.translation = dynamic_translation - geom.translation_correction();
+        transform.translation = dynamic_translation - geom.correction();
 
         let dynamic_rotation =
             Quat::from_xyzw(rot[0] as f32, rot[1] as f32, rot[2] as f32, rot[3] as f32);
@@ -132,9 +132,15 @@ fn setup_mujoco(
             add_children: impl FnOnce(&mut ChildBuilder),
         ) {
             let body_id = body.id;
+
             let predicate = geoms.iter().filter(|geom| {
                 geom.body_id == body_id && (geom.geom_group == 2 || geom.geom_group == 0)
             });
+
+            if predicate.clone().count() == 0 {
+                return;
+            }
+
             assert_eq!(predicate.clone().count(), 1);
             let geom = predicate.last().unwrap();
             // Extracting mesh from mujoco object doesn't work correctly

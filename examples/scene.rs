@@ -27,7 +27,7 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::BLACK))
         .insert_resource(MuJoCoPluginSettings {
-            model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
+            model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
             // model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             model_assets_path: "assets/mujoco_menagerie/unitree_a1/assets/".to_string(),
             pause_simulation: false,

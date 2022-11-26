@@ -70,7 +70,7 @@ impl Geom {
                     self.size[0]
                 } else {
                     // MuJoCo size 0 means infinite
-                    10.0
+                    1e6
                 };
                 Mesh::from(shape::Plane {
                     size: plane_size as f32,
@@ -87,7 +87,7 @@ impl Geom {
             }),
             GeomType::CAPSULE => Mesh::from(shape::Capsule {
                 radius: self.size[0] as f32,
-                depth: (self.size[1] * 2.0) as f32,
+                depth: (self.size[2] * 2.0) as f32,
                 ..default()
             }),
             GeomType::ELLIPSOID => todo!(),
@@ -114,10 +114,9 @@ impl Geom {
     }
 
     /// bevy and mujoco treat object frame differently, this function converts
-    pub fn translation_correction(&self) -> Vec3 {
+    pub fn correction(&self) -> Vec3 {
         match self.geom_type {
             GeomType::BOX => Vec3::new(0.0, (self.size[1] / 2.0) as f32, 0.0),
-            GeomType::SPHERE => Vec3::new(0.0, (self.size[0] * 2.0) as f32, 0.0),
             GeomType::CAPSULE => Vec3::new(0.0, (self.size[1] * 2.0) as f32, 0.0),
             GeomType::CYLINDER => Vec3::new(0.0, (self.size[2] * 2.0) as f32, 0.0),
             _ => Vec3::ZERO,
@@ -126,7 +125,7 @@ impl Geom {
 
     pub fn translation(&self) -> Vec3 {
         let trans = Vec3::new(self.pos[0] as f32, self.pos[1] as f32, self.pos[2] as f32);
-        trans - self.translation_correction()
+        trans - self.correction()
     }
 
     pub fn transform(&self) -> Transform {
