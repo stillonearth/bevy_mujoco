@@ -1,5 +1,9 @@
 # Bevy MuJoCo
 
+
+https://user-images.githubusercontent.com/97428129/204298761-18c3af03-4fd6-4c86-b173-afce432e7779.mp4
+
+
 _This is work in progress_
 
 Import MCJ files into Bevy and run simulations with MuJoCo.
