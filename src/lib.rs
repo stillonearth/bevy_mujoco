@@ -51,7 +51,7 @@ fn simulate_physics(
 
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / 60.0 {
+    while mujoco.time() - sim_start < 1.0 / 240.0 {
         mujoco.step();
     }
 
@@ -76,25 +76,12 @@ fn simulate_physics(
         assert_eq!(predicate.clone().count(), 1);
         let geom = predicate.last().unwrap();
 
-        // let geom_translation =
-        //     Vec3::new(geom.pos[0] as f32, geom.pos[1] as f32, geom.pos[2] as f32);
-        // let body_translation =
-        //     Vec3::new(body.pos[0] as f32, body.pos[1] as f32, body.pos[2] as f32);
-
         transform.translation = dynamic_translation - geom.correction();
 
         let dynamic_rotation =
-            Quat::from_xyzw(rot[0] as f32, rot[1] as f32, rot[2] as f32, rot[3] as f32);
-        let body_rotation = Quat::from_xyzw(
-            body.quat[0] as f32,
-            body.quat[1] as f32,
-            body.quat[2] as f32,
-            body.quat[3] as f32,
-        );
+            Quat::from_xyzw(rot[1] as f32, rot[0] as f32, rot[2] as f32, -rot[3] as f32);
 
-        let simulation_rotation = body_rotation * dynamic_rotation;
-
-        transform.rotation = simulation_rotation;
+        transform.rotation = dynamic_rotation;
     }
 }
 
@@ -110,12 +97,12 @@ fn setup_mujoco(
 
     commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
-        bodies,
+        bodies: bodies.clone(),
     });
 
     // this is a closure that can call itself recursively
     struct SpawnEntities<'s> {
-        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut ChildBuilder),
+        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut ChildBuilder, usize),
     }
 
     impl SpawnEntities<'_> {
@@ -126,38 +113,35 @@ fn setup_mujoco(
             child_builder: &mut ChildBuilder,
             body: &Body,
             geoms: &[Geom],
+            _bodies: &[Body],
             settings: &Res<MuJoCoPluginSettings>,
             meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
             materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
             add_children: impl FnOnce(&mut ChildBuilder),
+            _depth: usize,
         ) {
             let body_id = body.id;
 
-            let predicate = geoms.iter().filter(|geom| {
-                geom.body_id == body_id && (geom.geom_group == 2 || geom.geom_group == 0)
-            });
+            let geom = body.render_geom(geoms);
 
-            if predicate.clone().count() == 0 {
+            if geom.is_none() {
                 return;
             }
+            let geom = geom.unwrap();
 
-            assert_eq!(predicate.clone().count(), 1);
-            let geom = predicate.last().unwrap();
-            // Extracting mesh from mujoco object doesn't work correctly
-            // Insted load the obj directly with `bevy_obj`
             let mesh = geom.mesh(settings.model_assets_path.clone());
 
             let body_transform = body.transform();
-            let geom_transform = geom.clone().transform();
+            let geom_transform = geom.transform();
 
-            // deref
-            // let mut entity_commands = entity_commands.borrow_mut();
             let mut binding: EntityCommands;
             {
                 let mut materials = materials.borrow_mut();
                 let mut meshes = meshes.borrow_mut();
 
-                // let mut binding = entity_commands.borrow_mut();
+                let rotation = body_transform.rotation * geom_transform.rotation;
+                let translation = body_transform.translation + geom_transform.translation;
+
                 binding = child_builder.spawn(PbrBundle {
                     mesh: meshes.add(mesh),
                     material: materials.add(StandardMaterial {
@@ -170,8 +154,8 @@ fn setup_mujoco(
                         ..default()
                     }),
                     transform: Transform {
-                        translation: body_transform.translation + geom_transform.translation,
-                        rotation: body_transform.rotation * geom_transform.rotation,
+                        translation,
+                        rotation,
                         ..default()
                     },
                     ..default()
@@ -183,9 +167,6 @@ fn setup_mujoco(
                 .insert(Name::new(format!("MuJoCo::body_{}", body.name)));
 
             binding.with_children(add_children);
-
-            // binding
-            // child_entity_commands = binding;
         }
     }
 
@@ -196,10 +177,12 @@ fn setup_mujoco(
     // closure implementation
     let spawn_entities = SpawnEntities {
         /// A function that spawn body into the current position in a tree
-        f: &|func, body, child_builder| {
+        f: &|func, body, child_builder, depth| {
+            // if depth == 2 {
+            //     return;
+            // }
+
             let root_leaf = body.data();
-            // TODO: spawn_body inserts a new entity and return a cursor to a leaf in a tree
-            // It does not return entity_commands
 
             let add_children = |child_builder: &mut ChildBuilder| {
                 let mut body = body.clone();
@@ -208,7 +191,7 @@ fn setup_mujoco(
                     if leaf.is_none() {
                         return;
                     }
-                    (func.f)(func, BodyTree(leaf.unwrap()), child_builder);
+                    (func.f)(func, BodyTree(leaf.unwrap()), child_builder, depth + 1);
                 }
             };
 
@@ -216,10 +199,12 @@ fn setup_mujoco(
                 child_builder,
                 root_leaf,
                 &geoms,
+                &bodies,
                 &settings,
                 &meshes,
                 &materials,
                 add_children,
+                depth,
             );
         },
     };
@@ -230,8 +215,7 @@ fn setup_mujoco(
         .spawn((Name::new("MuJoCo::world"), SpatialBundle::default()))
         .with_children(|child_builder| {
             for body in mujoco.body_tree() {
-                (spawn_entities.f)(&spawn_entities, body, child_builder);
-                // return;
+                (spawn_entities.f)(&spawn_entities, body, child_builder, 0);
             }
         });
 }

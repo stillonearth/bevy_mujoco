@@ -17,7 +17,7 @@ use std::io::Read;
 
 use crate::mujoco_shape;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum GeomType {
     PLANE = 0,   // plane
     HFIELD,      // height field
@@ -106,10 +106,10 @@ impl Geom {
 
     pub fn rotation(&self) -> Quat {
         Quat::from_xyzw(
-            self.quat[0] as f32,
             self.quat[1] as f32,
+            self.quat[0] as f32,
             self.quat[2] as f32,
-            self.quat[3] as f32,
+            -self.quat[3] as f32,
         )
     }
 
@@ -124,8 +124,8 @@ impl Geom {
     }
 
     pub fn translation(&self) -> Vec3 {
-        let trans = Vec3::new(self.pos[0] as f32, self.pos[1] as f32, self.pos[2] as f32);
-        trans - self.correction()
+        let translation = Vec3::new(self.pos[0] as f32, self.pos[2] as f32, self.pos[1] as f32);
+        translation - self.correction()
     }
 
     pub fn transform(&self) -> Transform {
@@ -144,19 +144,22 @@ pub struct Body {
     pub parent_id: i32,
     pub root_id: i32,
     pub geom_n: i32,
+    pub geom_addr: i32,
     pub simple: u8,
     pub pos: [f64; 3],
     pub quat: [f64; 4],
+    pub ipos: [f64; 3],
+    pub iquat: [f64; 4],
     pub mass: f32,
 }
 
 impl Body {
     pub fn rotation(&self) -> Quat {
         Quat::from_xyzw(
-            self.quat[0] as f32,
             self.quat[1] as f32,
+            self.quat[0] as f32,
             self.quat[2] as f32,
-            self.quat[3] as f32,
+            -self.quat[3] as f32,
         )
     }
 
@@ -167,9 +170,59 @@ impl Body {
     pub fn transform(&self) -> Transform {
         Transform {
             translation: self.translation(),
-            rotation: self.rotation() * self.rotation(),
+            rotation: self.rotation(),
             ..default()
         }
+    }
+
+    pub fn irotation(&self) -> Quat {
+        Quat::from_xyzw(
+            self.iquat[1] as f32,
+            self.iquat[0] as f32,
+            self.iquat[2] as f32,
+            -self.iquat[3] as f32,
+        )
+    }
+
+    pub fn itranslation(&self) -> Vec3 {
+        Vec3::new(
+            self.ipos[0] as f32,
+            self.ipos[1] as f32,
+            self.ipos[2] as f32,
+        )
+    }
+
+    pub fn itransform(&self) -> Transform {
+        Transform {
+            translation: self.itranslation(),
+            rotation: self.irotation(),
+            ..default()
+        }
+    }
+
+    pub fn geoms(&self, geoms: &[Geom]) -> Vec<Geom> {
+        let mut body_geoms = Vec::new();
+        for i in 0..self.geom_n {
+            let geom = &geoms[(self.geom_addr + i) as usize];
+            body_geoms.push(geom.clone());
+        }
+        body_geoms
+    }
+
+    pub fn render_geom(&self, geoms: &[Geom]) -> Option<Geom> {
+        let geom_query = geoms.iter().filter(|g| g.body_id == self.id);
+        if geom_query.clone().count() == 1 {
+            return Some(geom_query.clone().last().unwrap().clone());
+        }
+
+        let geoms = self.geoms(geoms);
+
+        for geom in geoms {
+            println!("geom+type: {:?}", geom.geom_type);
+        }
+
+        // TODO: select geom for rendering
+        None
     }
 }
 
@@ -642,6 +695,10 @@ impl MuJoCo {
                 }
             };
 
+            if geom_body.geom_type == GeomType::PLANE {
+                geom_body.color = [0.0, 0.0, 0.5, 0.0];
+            }
+
             // bevy uses different coordinate system than mujoco so we need to swap y and z
             // position, and adjust quaternion
             replace_values_vec3(&mut geom_body.pos, 1, 2);
@@ -667,6 +724,11 @@ impl MuJoCo {
         let body_quat_vec: Vec<f64> =
             extract_vector_float_f64(mj_model.body_quat as *mut Local<f64>, 4, n_body);
 
+        let body_ipos_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.body_ipos as *mut Local<f64>, 3, n_body);
+        let body_iquat_vec: Vec<f64> =
+            extract_vector_float_f64(mj_model.body_iquat as *mut Local<f64>, 4, n_body);
+
         let mut bodies: Vec<Body> = Vec::new();
         for i in 0..n_body {
             // position
@@ -679,6 +741,16 @@ impl MuJoCo {
             let quat_array: ArrayVec<f64, 4> = quat_array.into_iter().collect();
             let quat_array: [f64; 4] = quat_array.into_inner().unwrap();
 
+            // inertial position
+            let ipos_array = body_ipos_vec[i * 3..i * 3 + 3].to_vec();
+            let ipos_array: ArrayVec<f64, 3> = ipos_array.into_iter().collect();
+            let ipos_array: [f64; 3] = ipos_array.into_inner().unwrap();
+
+            // inertial quaternion
+            let iquat_array = body_iquat_vec[i * 4..i * 4 + 4].to_vec();
+            let iquat_array: ArrayVec<f64, 4> = iquat_array.into_iter().collect();
+            let iquat_array: [f64; 4] = iquat_array.into_inner().unwrap();
+
             // metadata
             let name_idx = unsafe { *mj_model.name_bodyadr.add(i) as usize };
 
@@ -688,9 +760,12 @@ impl MuJoCo {
                     parent_id: *mj_model.body_parentid.add(i),
                     root_id: *mj_model.body_rootid.add(i),
                     geom_n: *mj_model.body_geomnum.add(i),
+                    geom_addr: *mj_model.body_geomadr.add(i),
                     simple: *mj_model.body_simple.add(i),
                     pos: pos_array,
                     quat: quat_array,
+                    ipos: ipos_array,
+                    iquat: iquat_array,
                     mass: *mj_model.body_mass.add(i) as f32,
                     name: extract_string(mj_model.names.add(name_idx)),
                 }

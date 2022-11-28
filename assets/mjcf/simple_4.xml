@@ -1,0 +1,18 @@
+<mujoco>
+    <worldbody>
+        <light name="light0" diffuse=".5 .5 .5" pos="0 0 3" dir="0 0 -1"/>
+        <geom name="geom0" type="plane" size="1 1 0.1" rgba=".9 0 0 1"/>
+        <body name="body1" pos="0 0 1" euler="0.5 3.0 1.5">
+            <joint name="joint0" type="free"/>
+            <geom name="geom1" type="capsule" size=".05 .065" rgba=".2 .8 .1 1"/>
+        </body>
+        <body name="body2" pos="0 0 2" euler="0.5 3.0 1.5">
+            <joint name="joint1" type="free"/>
+            <geom name="geom2" type="capsule" size=".05 .065" rgba=".2 .8 .1 1"/>
+        </body>
+        <body name="body3" pos="0 0 3" euler="0.5 3.0 1.5">
+            <joint name="joint2" type="free"/>
+            <geom name="geom3" type="capsule" size=".05 .065" rgba=".2 .8 .1 1"/>
+        </body>
+    </worldbody>
+</mujoco>
