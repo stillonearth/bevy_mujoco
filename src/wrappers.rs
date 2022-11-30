@@ -1,5 +1,5 @@
 use arrayvec::ArrayVec;
-use mujoco_rs_sys::mjData;
+use itertools::Itertools;
 use serde::{Serialize, Serializer};
 use trees::Tree;
 
@@ -12,8 +12,13 @@ use bevy::{
 };
 use bevy_obj::load_obj_from_bytes;
 
-use std::fs::{self, File};
+use mujoco_rs_sys::mjData;
+
 use std::io::Read;
+use std::{
+    cmp::Ordering,
+    fs::{self, File},
+};
 
 use crate::mujoco_shape;
 
@@ -105,12 +110,18 @@ impl Geom {
     }
 
     pub fn rotation(&self) -> Quat {
-        Quat::from_xyzw(
+        let rot = Quat::from_xyzw(
             self.quat[1] as f32,
             self.quat[0] as f32,
             self.quat[2] as f32,
             -self.quat[3] as f32,
-        )
+        );
+
+        return rot;
+
+        let euler = rot.to_euler(EulerRot::XYZ);
+
+        return Quat::from_euler(EulerRot::XYZ, euler.2, euler.1, euler.0);
     }
 
     /// bevy and mujoco treat object frame differently, this function converts
@@ -160,11 +171,12 @@ impl Body {
             self.quat[0] as f32,
             self.quat[2] as f32,
             -self.quat[3] as f32,
-        )
+        ) * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
+            * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
     }
 
     pub fn translation(&self) -> Vec3 {
-        Vec3::new(self.pos[0] as f32, self.pos[1] as f32, self.pos[2] as f32)
+        Vec3::new(self.pos[0] as f32, self.pos[2] as f32, self.pos[1] as f32)
     }
 
     pub fn transform(&self) -> Transform {
@@ -217,12 +229,21 @@ impl Body {
 
         let geoms = self.geoms(geoms);
 
-        for geom in geoms {
-            println!("geom+type: {:?}", geom.geom_type);
-        }
+        // Current method of rendering is to find a geom with largest group in {0, 1, 2}
+        let geom = geoms
+            .iter()
+            .filter(|g| g.geom_group < 3)
+            .sorted_by(|g1, g2| {
+                if g1.geom_group < g2.geom_group {
+                    Ordering::Greater
+                } else {
+                    Ordering::Less
+                }
+            })
+            .last()
+            .map(|g| g.clone());
 
-        // TODO: select geom for rendering
-        None
+        return geom;
     }
 }
 
@@ -626,6 +647,17 @@ impl MuJoCo {
         names
     }
 
+    pub fn test_geom_addr(&self) -> Vec<usize> {
+        let mj_model = &self.mj_model;
+        let mj_model = unsafe { *mj_model.ptr() };
+        let mut geom_addr: Vec<usize> = Vec::new();
+        for i in 0..mj_model.ngeom {
+            let geom_name_idx = unsafe { *mj_model.name_geomadr.add(i as usize) as usize };
+            geom_addr.push(geom_name_idx);
+        }
+        geom_addr
+    }
+
     /// Get geoms of the model
     pub fn geoms(&self) -> Vec<Geom> {
         let mj_model = &self.mj_model;
@@ -918,5 +950,14 @@ mod tests {
         let names = model.names();
 
         assert!(!names.is_empty());
+    }
+
+    #[test]
+    fn test_geom_addr() {
+        let model = &MuJoCo::new_from_xml("assets/mujoco_menagerie/unitree_a1/a1.xml");
+
+        let geom_addr = model.test_geom_addr();
+        eprint!("{:?}", geom_addr);
+        assert!(geom_addr.len() != 0);
     }
 }

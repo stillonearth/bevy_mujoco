@@ -12,6 +12,7 @@ mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "
 bevy_obj = "0.9.1"
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
+itertools = "0.10.5"
 
 [dev-dependencies]
 bevy-inspector-egui = { version = "0.14.0" }

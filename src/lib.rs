@@ -129,6 +129,13 @@ fn setup_mujoco(
             }
             let geom = geom.unwrap();
 
+            println!(
+                "body.name: {}\t geom.rotation: {:?}\t body.rotation: {:?}",
+                body.name,
+                geom.rotation().to_euler(EulerRot::XYZ),
+                body.rotation().to_euler(EulerRot::XYZ)
+            );
+
             let mesh = geom.mesh(settings.model_assets_path.clone());
 
             let body_transform = body.transform();
@@ -178,9 +185,9 @@ fn setup_mujoco(
     let spawn_entities = SpawnEntities {
         /// A function that spawn body into the current position in a tree
         f: &|func, body, child_builder, depth| {
-            // if depth == 2 {
-            //     return;
-            // }
+            if depth == 2 {
+                return;
+            }
 
             let root_leaf = body.data();
 
