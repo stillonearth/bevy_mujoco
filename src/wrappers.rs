@@ -148,13 +148,10 @@ pub struct Body {
     pub id: i32,
     pub name: String,
     pub parent_id: i32,
-    pub root_id: i32,
     pub geom_n: i32,
     pub geom_addr: i32,
-    pub simple: u8,
     pub pos: [f64; 3],
     pub quat: [f64; 4],
-    pub mass: f32,
 }
 
 impl Body {
@@ -621,17 +618,6 @@ impl MuJoCo {
         names
     }
 
-    pub fn test_geom_addr(&self) -> Vec<usize> {
-        let mj_model = &self.mj_model;
-        let mj_model = unsafe { *mj_model.ptr() };
-        let mut geom_addr: Vec<usize> = Vec::new();
-        for i in 0..mj_model.ngeom {
-            let geom_name_idx = unsafe { *mj_model.name_geomadr.add(i as usize) as usize };
-            geom_addr.push(geom_name_idx);
-        }
-        geom_addr
-    }
-
     /// Get geoms of the model
     pub fn geoms(&self) -> Vec<Geom> {
         let mj_model = &self.mj_model;
@@ -755,13 +741,10 @@ impl MuJoCo {
                 Body {
                     id: i as i32,
                     parent_id: *mj_model.body_parentid.add(i),
-                    root_id: *mj_model.body_rootid.add(i),
                     geom_n: *mj_model.body_geomnum.add(i),
                     geom_addr: *mj_model.body_geomadr.add(i),
-                    simple: *mj_model.body_simple.add(i),
                     pos: pos_array,
                     quat: quat_array,
-                    mass: *mj_model.body_mass.add(i) as f32,
                     name: extract_string(mj_model.names.add(name_idx)),
                 }
             };
@@ -914,14 +897,5 @@ mod tests {
         let names = model.names();
 
         assert!(!names.is_empty());
-    }
-
-    #[test]
-    fn test_geom_addr() {
-        let model = &MuJoCo::new_from_xml("assets/mujoco_menagerie/unitree_a1/a1.xml");
-
-        let geom_addr = model.test_geom_addr();
-        eprint!("{:?}", geom_addr);
-        assert!(!geom_addr.is_empty());
     }
 }

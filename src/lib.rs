@@ -49,6 +49,7 @@ fn simulate_physics(
     settings: ResMut<MuJoCoPluginSettings>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
     mujoco_resources: Res<MuJoCoResources>,
+    mut mesh_query: Query<(Entity, &mut Transform, &MuJoCoMesh, Without<MuJoCoBody>)>,
 ) {
     if settings.pause_simulation {
         return;
@@ -56,7 +57,7 @@ fn simulate_physics(
 
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / 120.0 {
+    while mujoco.time() - sim_start < 1.0 / 60.0 {
         mujoco.step();
     }
 
@@ -103,17 +104,24 @@ fn simulate_physics(
         );
 
         // Converting from MuJoCo to Bevy coordinate system
-        transform.translation = parent_rotation
-            .inverse()
-            .mul_vec3(translation - parent_translation);
+        let parent_rotation_inverse = parent_rotation.inverse();
+        transform.translation = parent_rotation_inverse.mul_vec3(translation - parent_translation);
+        transform.rotation = parent_rotation_inverse * rotation;
 
-        transform.rotation = parent_rotation.inverse() * rotation;
-
+        // Corrections due to way MuJoCo handles geometry
         if geom.geom_type != GeomType::MESH {
             transform.translation -= geom.correction();
         } else {
             transform.translation.z *= -1.0;
+            // transform.rotation *= Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
         }
+    }
+
+    // Different coordinate systems with model and data. Rotate model to match data.
+    // TODO: this is a hack, find better invariant
+    let model_rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+    for (_, mut transform, _, _) in mesh_query.iter_mut() {
+        transform.rotation = model_rotation;
     }
 }
 
@@ -129,7 +137,7 @@ fn setup_mujoco(
 
     commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
-        bodies: bodies.clone(),
+        bodies,
     });
 
     // this is a closure that can call itself recursively
@@ -145,12 +153,11 @@ fn setup_mujoco(
             child_builder: &mut ChildBuilder,
             body: &Body,
             geoms: &[Geom],
-            _bodies: &[Body],
             settings: &Res<MuJoCoPluginSettings>,
             meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
             materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
             add_children: impl FnOnce(&mut ChildBuilder),
-            _depth: usize,
+            depth: usize,
         ) {
             let geom = body.render_geom(geoms);
             if geom.is_none() {
@@ -160,19 +167,33 @@ fn setup_mujoco(
             let mesh = geom.mesh(settings.model_assets_path.clone());
             let body_transform = body.transform();
             let body_id = body.id;
-            // let geom_transform = geom.transform();
 
             let mut binding: EntityCommands;
             {
                 let mut materials = materials.borrow_mut();
                 let mut meshes = meshes.borrow_mut();
 
+                // Fixing coordinate system of MuJoCo for root body
+
+                let mut transform = Transform {
+                    translation: body_transform.translation,
+                    ..default()
+                };
+
+                if depth == 0 {
+                    let t_y = transform.translation.y;
+                    let t_z = transform.translation.z;
+                    transform.translation.z = t_y;
+                    transform.translation.y = t_z;
+                    transform.rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+                }
+
                 binding = child_builder.spawn((
                     MuJoCoBody { id: body_id },
                     Name::new(format!("MuJoCo::body_{}", body.name)),
                     SpatialBundle {
-                        transform: body_transform,
-                        ..Default::default()
+                        transform,
+                        ..default()
                     },
                 ));
 
@@ -181,34 +202,25 @@ fn setup_mujoco(
                 //     body.name, body.quat, geom.quat, geom.pos, body.pos
                 // );
 
-                let mut rotation = Quat::IDENTITY;
-                if geom.geom_type == GeomType::MESH {
-                    rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                } else {
-                    // rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
-                }
-
                 binding.with_children(|children| {
-                    children
-                        .spawn(PbrBundle {
-                            mesh: meshes.add(mesh),
-                            material: materials.add(StandardMaterial {
-                                base_color: Color::rgba(
-                                    geom.color[0],
-                                    geom.color[1],
-                                    geom.color[2],
-                                    geom.color[3],
-                                ),
-                                ..default()
-                            }),
-                            transform: Transform {
-                                rotation,
-                                ..default()
-                            },
+                    let mut cmd = children.spawn(PbrBundle {
+                        mesh: meshes.add(mesh),
+                        material: materials.add(StandardMaterial {
+                            base_color: Color::rgba(
+                                geom.color[0],
+                                geom.color[1],
+                                geom.color[2],
+                                geom.color[3],
+                            ),
                             ..default()
-                        })
-                        .insert(MuJoCoMesh { id: geom.id })
-                        .insert(Name::new(format!("MuJoCo::mesh_{}", body.name)));
+                        }),
+                        ..default()
+                    });
+
+                    cmd.insert(Name::new(format!("MuJoCo::mesh_{}", body.name)));
+                    if geom.geom_type == GeomType::MESH {
+                        cmd.insert(MuJoCoMesh { id: geom.id });
+                    }
                 });
             }
 
@@ -241,7 +253,6 @@ fn setup_mujoco(
                 child_builder,
                 root_leaf,
                 &geoms,
-                &bodies,
                 &settings,
                 &meshes,
                 &materials,
