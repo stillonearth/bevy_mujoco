@@ -110,18 +110,12 @@ impl Geom {
     }
 
     pub fn rotation(&self) -> Quat {
-        let rot = Quat::from_xyzw(
+        Quat::from_xyzw(
             self.quat[1] as f32,
             self.quat[0] as f32,
             self.quat[2] as f32,
             -self.quat[3] as f32,
-        );
-
-        return rot;
-
-        let euler = rot.to_euler(EulerRot::XYZ);
-
-        return Quat::from_euler(EulerRot::XYZ, euler.2, euler.1, euler.0);
+        )
     }
 
     /// bevy and mujoco treat object frame differently, this function converts
@@ -495,7 +489,7 @@ impl MuJoCo {
         Self { mj_model, mj_data }
     }
 
-    /// Returns positions of bodies
+    /// Returns positions of bodies in inertial frame
     pub fn xpos(&self) -> Vec<[f64; 3]> {
         let mj_data = self.mj_data.0;
         let raw_vec = unsafe { (*mj_data).xpos };
