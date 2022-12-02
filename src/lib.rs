@@ -56,7 +56,7 @@ fn simulate_physics(
 
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / 60000.0 {
+    while mujoco.time() - sim_start < 1.0 / 120.0 {
         mujoco.step();
     }
 
@@ -106,11 +106,13 @@ fn simulate_physics(
         transform.translation = parent_rotation
             .inverse()
             .mul_vec3(translation - parent_translation);
-        transform.translation.z *= -1.0;
+
         transform.rotation = parent_rotation.inverse() * rotation;
 
         if geom.geom_type != GeomType::MESH {
             transform.translation -= geom.correction();
+        } else {
+            transform.translation.z *= -1.0;
         }
     }
 }
@@ -182,6 +184,8 @@ fn setup_mujoco(
                 let mut rotation = Quat::IDENTITY;
                 if geom.geom_type == GeomType::MESH {
                     rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+                } else {
+                    // rotation = Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
                 }
 
                 binding.with_children(|children| {

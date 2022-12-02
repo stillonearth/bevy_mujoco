@@ -33,11 +33,11 @@ fn main() {
             pause_simulation: false,
         })
         .add_plugins(DefaultPlugins)
-        .add_plugin(NoCameraPlayerPlugin)
-        .insert_resource(MovementSettings {
-            speed: 3.0,
-            ..default()
-        })
+        // .add_plugin(NoCameraPlayerPlugin)
+        // .insert_resource(MovementSettings {
+        //     speed: 3.0,
+        //     ..default()
+        // })
         .add_plugin(MuJoCoPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)

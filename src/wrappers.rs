@@ -22,7 +22,7 @@ use std::{
 
 use crate::mujoco_shape;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GeomType {
     PLANE = 0,   // plane
     HFIELD,      // height field
@@ -214,7 +214,8 @@ impl Body {
                     Ordering::Less
                 }
             })
-            .last().cloned();
+            .last()
+            .cloned();
 
         geom
     }
