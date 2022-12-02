@@ -64,6 +64,7 @@ pub struct Geom {
     pub color: [f32; 4],
     pub mesh: Option<MuJoCoMesh>,
     pub geom_group: i32,
+    pub geom_contype: i32,
 }
 
 impl Geom {
@@ -153,8 +154,6 @@ pub struct Body {
     pub simple: u8,
     pub pos: [f64; 3],
     pub quat: [f64; 4],
-    pub ipos: [f64; 3],
-    pub iquat: [f64; 4],
     pub mass: f32,
 }
 
@@ -165,8 +164,7 @@ impl Body {
             self.quat[0] as f32,
             self.quat[2] as f32,
             -self.quat[3] as f32,
-        ) * Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
-            * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
+        )
     }
 
     pub fn translation(&self) -> Vec3 {
@@ -177,31 +175,6 @@ impl Body {
         Transform {
             translation: self.translation(),
             rotation: self.rotation(),
-            ..default()
-        }
-    }
-
-    pub fn irotation(&self) -> Quat {
-        Quat::from_xyzw(
-            self.iquat[1] as f32,
-            self.iquat[0] as f32,
-            self.iquat[2] as f32,
-            -self.iquat[3] as f32,
-        )
-    }
-
-    pub fn itranslation(&self) -> Vec3 {
-        Vec3::new(
-            self.ipos[0] as f32,
-            self.ipos[1] as f32,
-            self.ipos[2] as f32,
-        )
-    }
-
-    pub fn itransform(&self) -> Transform {
-        Transform {
-            translation: self.itranslation(),
-            rotation: self.irotation(),
             ..default()
         }
     }
@@ -223,21 +196,27 @@ impl Body {
 
         let geoms = self.geoms(geoms);
 
-        // Current method of rendering is to find a geom with largest group in {0, 1, 2}
+        // This is questionable, but it seems to work
         let geom = geoms
             .iter()
             .filter(|g| g.geom_group < 3)
             .sorted_by(|g1, g2| {
+                if g1.geom_type == GeomType::MESH && g2.geom_type != GeomType::MESH {
+                    return Ordering::Less;
+                }
+                if g1.geom_type != GeomType::MESH && g2.geom_type == GeomType::MESH {
+                    return Ordering::Greater;
+                }
+
                 if g1.geom_group < g2.geom_group {
                     Ordering::Greater
                 } else {
                     Ordering::Less
                 }
             })
-            .last()
-            .map(|g| g.clone());
+            .last().cloned();
 
-        return geom;
+        geom
     }
 }
 
@@ -712,6 +691,7 @@ impl MuJoCo {
                     geom_type: GeomType::from::<usize>(*mj_model.geom_type.add(i) as usize),
                     body_id: *mj_model.geom_bodyid.add(i),
                     geom_group: *mj_model.geom_group.add(i),
+                    geom_contype: *mj_model.geom_contype.add(i),
                     pos: pos_array,
                     quat: quat_array,
                     size: size_array,
@@ -750,9 +730,9 @@ impl MuJoCo {
         let body_quat_vec: Vec<f64> =
             extract_vector_float_f64(mj_model.body_quat as *mut Local<f64>, 4, n_body);
 
-        let body_ipos_vec: Vec<f64> =
+        let _body_ipos_vec: Vec<f64> =
             extract_vector_float_f64(mj_model.body_ipos as *mut Local<f64>, 3, n_body);
-        let body_iquat_vec: Vec<f64> =
+        let _body_iquat_vec: Vec<f64> =
             extract_vector_float_f64(mj_model.body_iquat as *mut Local<f64>, 4, n_body);
 
         let mut bodies: Vec<Body> = Vec::new();
@@ -767,16 +747,6 @@ impl MuJoCo {
             let quat_array: ArrayVec<f64, 4> = quat_array.into_iter().collect();
             let quat_array: [f64; 4] = quat_array.into_inner().unwrap();
 
-            // inertial position
-            let ipos_array = body_ipos_vec[i * 3..i * 3 + 3].to_vec();
-            let ipos_array: ArrayVec<f64, 3> = ipos_array.into_iter().collect();
-            let ipos_array: [f64; 3] = ipos_array.into_inner().unwrap();
-
-            // inertial quaternion
-            let iquat_array = body_iquat_vec[i * 4..i * 4 + 4].to_vec();
-            let iquat_array: ArrayVec<f64, 4> = iquat_array.into_iter().collect();
-            let iquat_array: [f64; 4] = iquat_array.into_inner().unwrap();
-
             // metadata
             let name_idx = unsafe { *mj_model.name_bodyadr.add(i) as usize };
 
@@ -790,8 +760,6 @@ impl MuJoCo {
                     simple: *mj_model.body_simple.add(i),
                     pos: pos_array,
                     quat: quat_array,
-                    ipos: ipos_array,
-                    iquat: iquat_array,
                     mass: *mj_model.body_mass.add(i) as f32,
                     name: extract_string(mj_model.names.add(name_idx)),
                 }
@@ -805,6 +773,7 @@ impl MuJoCo {
         bodies
     }
 
+    /// Returns tree of bodies
     pub fn body_tree(&self) -> Vec<BodyTree> {
         let mut trees: Vec<BodyTree> = vec![];
         let bodies = self.bodies();
@@ -952,6 +921,6 @@ mod tests {
 
         let geom_addr = model.test_geom_addr();
         eprint!("{:?}", geom_addr);
-        assert!(geom_addr.len() != 0);
+        assert!(!geom_addr.is_empty());
     }
 }

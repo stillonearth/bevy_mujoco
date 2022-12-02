@@ -13,7 +13,12 @@ pub struct MuJoCoBody {
     pub id: i32,
 }
 
-#[derive(Resource)]
+#[derive(Component)]
+pub struct MuJoCoMesh {
+    pub id: i32,
+}
+
+#[derive(Resource, Default)]
 pub struct MuJoCoPluginSettings {
     pub model_xml_path: String,
     pub model_assets_path: String,
@@ -41,7 +46,7 @@ impl Plugin for MuJoCoPlugin {
 
 fn simulate_physics(
     mujoco: ResMut<MuJoCo>,
-    settings: Res<MuJoCoPluginSettings>,
+    settings: ResMut<MuJoCoPluginSettings>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
     mujoco_resources: Res<MuJoCoResources>,
 ) {
@@ -51,7 +56,7 @@ fn simulate_physics(
 
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / 100000.0 {
+    while mujoco.time() - sim_start < 1.0 / 60000.0 {
         mujoco.step();
     }
 
@@ -76,7 +81,6 @@ fn simulate_physics(
         let body = mujoco_resources.bodies[body_id].clone();
         let body_id = body.id;
         let parent_body_id = body.parent_id;
-        // let parent_body = mujoco_resources.bodies[parent_body_id as usize].clone();
         let geom = find_geom(body_id);
 
         let pos = positions[body_id as usize];
@@ -98,17 +102,16 @@ fn simulate_physics(
             -parent_rot[3] as f32,
         );
 
-        transform.translation = translation - parent_translation;
-        transform.rotation = rotation * parent_rotation.inverse();
-        // * ;
+        // Converting from MuJoCo to Bevy coordinate system
+        transform.translation = parent_rotation
+            .inverse()
+            .mul_vec3(translation - parent_translation);
+        transform.translation.z *= -1.0;
+        transform.rotation = parent_rotation.inverse() * rotation;
 
         if geom.geom_type != GeomType::MESH {
             transform.translation -= geom.correction();
-        } else {
-            // transform.rotation *= Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4);
         }
-
-        // transform.translation = transform.rotation.mul_vec3(transform.translation);
     }
 }
 
@@ -147,58 +150,63 @@ fn setup_mujoco(
             add_children: impl FnOnce(&mut ChildBuilder),
             _depth: usize,
         ) {
-            let body_id = body.id;
-
             let geom = body.render_geom(geoms);
-
             if geom.is_none() {
                 return;
             }
             let geom = geom.unwrap();
-
-            println!(
-                "body.name: {}\t geom.rotation: {:?}\t body.rotation: {:?}",
-                body.name,
-                geom.rotation().to_euler(EulerRot::XYZ),
-                body.rotation().to_euler(EulerRot::XYZ)
-            );
-
             let mesh = geom.mesh(settings.model_assets_path.clone());
-
             let body_transform = body.transform();
-            let geom_transform = geom.transform();
+            let body_id = body.id;
+            // let geom_transform = geom.transform();
 
             let mut binding: EntityCommands;
             {
                 let mut materials = materials.borrow_mut();
                 let mut meshes = meshes.borrow_mut();
 
-                let rotation = body_transform.rotation * geom_transform.rotation;
-                let translation = body_transform.translation; //+ geom_transform.translation;
-
-                binding = child_builder.spawn(PbrBundle {
-                    mesh: meshes.add(mesh),
-                    material: materials.add(StandardMaterial {
-                        base_color: Color::rgba(
-                            geom.color[0],
-                            geom.color[1],
-                            geom.color[2],
-                            geom.color[3],
-                        ),
-                        ..default()
-                    }),
-                    transform: Transform {
-                        translation,
-                        rotation,
-                        ..default()
+                binding = child_builder.spawn((
+                    MuJoCoBody { id: body_id },
+                    Name::new(format!("MuJoCo::body_{}", body.name)),
+                    SpatialBundle {
+                        transform: body_transform,
+                        ..Default::default()
                     },
-                    ..default()
+                ));
+
+                // println!(
+                //     "body.name: {}, body.quat:{:?}, geom.quat: {:?}, geom.pos: {:?}, body.pos: {:?}",
+                //     body.name, body.quat, geom.quat, geom.pos, body.pos
+                // );
+
+                let mut rotation = Quat::IDENTITY;
+                if geom.geom_type == GeomType::MESH {
+                    rotation = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+                }
+
+                binding.with_children(|children| {
+                    children
+                        .spawn(PbrBundle {
+                            mesh: meshes.add(mesh),
+                            material: materials.add(StandardMaterial {
+                                base_color: Color::rgba(
+                                    geom.color[0],
+                                    geom.color[1],
+                                    geom.color[2],
+                                    geom.color[3],
+                                ),
+                                ..default()
+                            }),
+                            transform: Transform {
+                                rotation,
+                                ..default()
+                            },
+                            ..default()
+                        })
+                        .insert(MuJoCoMesh { id: geom.id })
+                        .insert(Name::new(format!("MuJoCo::mesh_{}", body.name)));
                 });
             }
-
-            binding
-                .insert(MuJoCoBody { id: body_id })
-                .insert(Name::new(format!("MuJoCo::body_{}", body.name)));
 
             binding.with_children(add_children);
         }
@@ -212,10 +220,6 @@ fn setup_mujoco(
     let spawn_entities = SpawnEntities {
         /// A function that spawn body into the current position in a tree
         f: &|func, body, child_builder, depth| {
-            if depth == 3 {
-                return;
-            }
-
             let root_leaf = body.data();
 
             let add_children = |child_builder: &mut ChildBuilder| {
