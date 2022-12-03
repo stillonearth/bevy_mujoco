@@ -78,7 +78,7 @@ fn simulate_physics(
 
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / 60000.0 {
+    while mujoco.time() - sim_start < 1.0 / 60.0 {
         mujoco.step();
     }
     // mujoco.evaluate_sensors();
