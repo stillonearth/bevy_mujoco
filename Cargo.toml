@@ -19,3 +19,4 @@ bevy-inspector-egui = { version = "0.14.0" }
 bevy_flycam = { git = "https://github.com/sburris0/bevy_flycam" }
 pretty_assertions = "1.2.1"
 ron = "0.8"
+rand = "0.8.5"

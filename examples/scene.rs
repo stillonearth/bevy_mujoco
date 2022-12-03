@@ -3,6 +3,8 @@ use bevy_flycam::*;
 use bevy_inspector_egui::*;
 use bevy_mujoco::*;
 
+use rand::Rng;
+
 fn setup(mut commands: Commands) {
     commands.spawn(PointLightBundle {
         point_light: PointLight {
@@ -23,6 +25,19 @@ fn setup(mut commands: Commands) {
         .insert(FlyCam);
 }
 
+fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
+    println!("Sensor reading: {:?}", mujoco_resources.state);
+
+    let mut rng = rand::thread_rng();
+
+    let mut control: Vec<f64> = vec![0.0; mujoco_resources.control.number_of_controls];
+    for i in 0..mujoco_resources.control.number_of_controls {
+        control[i] = rng.gen::<f64>();
+    }
+
+    mujoco_resources.control.data = control;
+}
+
 fn main() {
     App::new()
         // .insert_resource(ClearColor(Color::BLACK))
@@ -41,5 +56,6 @@ fn main() {
         .add_plugin(MuJoCoPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .add_startup_system(setup)
+        .add_system(robot_control_loop)
         .run();
 }

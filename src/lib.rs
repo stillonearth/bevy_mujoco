@@ -25,10 +25,27 @@ pub struct MuJoCoPluginSettings {
     pub pause_simulation: bool,
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct MuJoCoResources {
     pub geoms: Vec<Geom>,
     pub bodies: Vec<Body>,
+
+    pub state: MuJoCoState,
+    pub control: MuJoCoControl,
+}
+
+#[derive(Default, Debug)]
+pub struct MuJoCoState {
+    pub sensor_data: Vec<f64>,
+    pub qpos: Vec<f64>,
+    pub qvel: Vec<f64>,
+    pub cfrc_ext: Vec<[f64; 6]>,
+}
+
+#[derive(Default, Debug)]
+pub struct MuJoCoControl {
+    pub data: Vec<f64>,
+    pub number_of_controls: usize,
 }
 
 pub struct MuJoCoPlugin;
@@ -48,18 +65,30 @@ fn simulate_physics(
     mujoco: ResMut<MuJoCo>,
     settings: ResMut<MuJoCoPluginSettings>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
-    mujoco_resources: Res<MuJoCoResources>,
+    mut mujoco_resources: ResMut<MuJoCoResources>,
     mut mesh_query: Query<(Entity, &mut Transform, &MuJoCoMesh, Without<MuJoCoBody>)>,
 ) {
     if settings.pause_simulation {
         return;
     }
 
+    // Set control data
+    mujoco.control(&mujoco_resources.control.data);
+
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
     while mujoco.time() - sim_start < 1.0 / 60.0 {
         mujoco.step();
     }
+    // mujoco.evaluate_sensors();
+
+    // Read Sensor data
+    mujoco_resources.state = MuJoCoState {
+        sensor_data: mujoco.sensordata(),
+        qpos: mujoco.qpos(),
+        qvel: mujoco.qvel(),
+        cfrc_ext: mujoco.cfrc_ext(),
+    };
 
     let positions = mujoco.xpos();
     let rotations = mujoco.xquat();
@@ -109,11 +138,13 @@ fn simulate_physics(
         transform.rotation = parent_rotation_inverse * rotation;
 
         // Corrections due to way MuJoCo handles geometry
-        if geom.geom_type != GeomType::MESH {
-            transform.translation -= geom.correction();
-        } else {
-            transform.translation.z *= -1.0;
-            // transform.rotation *= Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
+        match geom.geom_type {
+            GeomType::MESH => {
+                transform.translation.z *= -1.0;
+            }
+            _ => {
+                transform.translation -= geom.correction();
+            }
         }
     }
 
@@ -138,9 +169,14 @@ fn setup_mujoco(
     commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
         bodies,
+        control: MuJoCoControl {
+            number_of_controls: mujoco.nu(),
+            ..default()
+        },
+        ..default()
     });
 
-    // this is a closure that can call itself recursively
+    // This is a closure that can call itself recursively
     struct SpawnEntities<'s> {
         f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut ChildBuilder, usize),
     }
@@ -196,11 +232,6 @@ fn setup_mujoco(
                         ..default()
                     },
                 ));
-
-                // println!(
-                //     "body.name: {}, body.quat:{:?}, geom.quat: {:?}, geom.pos: {:?}, body.pos: {:?}",
-                //     body.name, body.quat, geom.quat, geom.pos, body.pos
-                // );
 
                 binding.with_children(|children| {
                     let mut cmd = children.spawn(PbrBundle {

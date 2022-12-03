@@ -14,11 +14,8 @@ use bevy_obj::load_obj_from_bytes;
 
 use mujoco_rs_sys::mjData;
 
-use std::io::Read;
-use std::{
-    cmp::Ordering,
-    fs::{self, File},
-};
+use std::{cmp::Ordering, fs::File};
+use std::{fs::metadata, io::Read};
 
 use crate::mujoco_shape;
 
@@ -241,7 +238,7 @@ impl MuJoCoMesh {
         // load_obj_from_bytes
 
         let filename = format!("{}/{}.obj", assets_path, self.name);
-        let metadata = fs::metadata(&filename).expect("unable to read metadata");
+        let metadata = metadata(&filename).expect("unable to read metadata");
 
         let mut f = File::open(&filename).expect("no file found");
         let mut buffer = vec![0; metadata.len() as usize];
@@ -503,6 +500,36 @@ impl MuJoCo {
         xquat
     }
 
+    /// Returns generalized positions of bodies
+    pub fn qpos(&self) -> Vec<f64> {
+        let mj_data = self.mj_data.0;
+        let raw_vec = unsafe { (*mj_data).qpos };
+
+        let mut qpos: Vec<f64> = Vec::new();
+
+        for i in 0..self.nq() {
+            let entry = unsafe { *raw_vec.add(i) };
+            qpos.push(entry);
+        }
+
+        qpos
+    }
+
+    /// Returns generalized velocities of bodies
+    pub fn qvel(&self) -> Vec<f64> {
+        let mj_data = self.mj_data.0;
+        let raw_vec = unsafe { (*mj_data).qvel };
+
+        let mut qvel: Vec<f64> = Vec::new();
+
+        for i in 0..self.nv() {
+            let entry = unsafe { *raw_vec.add(i) };
+            qvel.push(entry);
+        }
+
+        qvel
+    }
+
     /// Returns a number of geoms in the model
     pub fn ngeom(&self) -> usize {
         unsafe {
@@ -511,11 +538,73 @@ impl MuJoCo {
         }
     }
 
+    /// Returns rotations of bodies
+    pub fn cfrc_ext(&self) -> Vec<[f64; 6]> {
+        let mj_data = self.mj_data.0;
+        let raw_vec = unsafe { (*mj_data).cfrc_ext };
+        let raw_quat = extract_vector_float_f64(raw_vec as *mut Local<f64>, 6, self.nbody());
+        let mut cfrc_ext: Vec<[f64; 6]> = Vec::new();
+
+        for i in 0..self.nbody() {
+            let entry: [f64; 6] = [
+                raw_quat[i * 6],
+                raw_quat[i * 6 + 1],
+                raw_quat[i * 6 + 2],
+                raw_quat[i * 6 + 3],
+                raw_quat[i * 6 + 4],
+                raw_quat[i * 6 + 5],
+            ];
+            cfrc_ext.push(entry);
+        }
+
+        cfrc_ext
+    }
+
+    /// Returns a number of generalized coordinates
+    pub fn nq(&self) -> usize {
+        unsafe {
+            let mj_model = &self.mj_model;
+            (*mj_model.ptr()).nq as usize
+        }
+    }
+
+    /// Returns a number of activation states
+    pub fn na(&self) -> usize {
+        unsafe {
+            let mj_model = &self.mj_model;
+            (*mj_model.ptr()).na as usize
+        }
+    }
+
+    /// Returns a number of degrees of freedom
+    pub fn nv(&self) -> usize {
+        unsafe {
+            let mj_model = &self.mj_model;
+            (*mj_model.ptr()).nv as usize
+        }
+    }
+
+    /// Returns a number of actuators/controls
+    pub fn nu(&self) -> usize {
+        unsafe {
+            let mj_model = &self.mj_model;
+            (*mj_model.ptr()).nu as usize
+        }
+    }
+
     /// Returns a number of bodies in the model
     pub fn nbody(&self) -> usize {
         unsafe {
             let mj_model = &self.mj_model;
             (*mj_model.ptr()).nbody as usize
+        }
+    }
+
+    /// number of fields in sensor data vector
+    pub fn nsensordata(&self) -> usize {
+        unsafe {
+            let mj_model = &self.mj_model;
+            (*mj_model.ptr()).nsensordata as usize
         }
     }
 
@@ -584,6 +673,51 @@ impl MuJoCo {
         };
     }
 
+    /// Evaulate constraint forces ans sensors
+    // TODO: (bug?) cfrc_ext return 0-s
+    pub fn evaluate_sensors(&self) {
+        unsafe {
+            let mj_model = &self.mj_model;
+            let mj_data = self.mj_data.0;
+            mujoco_rs_sys::no_render::mj_sensorPos(mj_model.ptr(), mj_data);
+            mujoco_rs_sys::no_render::mj_sensorVel(mj_model.ptr(), mj_data);
+            mujoco_rs_sys::no_render::mj_sensorAcc(mj_model.ptr(), mj_data);
+        };
+    }
+
+    /// Set control vector
+    pub fn control(&self, control: &[f64]) {
+        let mj_data = self.mj_data.0;
+        let raw_vec = unsafe { (*mj_data).ctrl };
+
+        if control.len() != self.nu() {
+            return;
+            // panic!("Control vector has wrong size");
+        }
+
+        #[allow(clippy::needless_range_loop)]
+        for i in 0..self.nu() {
+            unsafe {
+                *raw_vec.add(i) = control[i];
+            }
+        }
+    }
+
+    /// Read sensor data
+    pub fn sensordata(&self) -> Vec<f64> {
+        let mj_data = self.mj_data.0;
+        let raw_vec = unsafe { (*mj_data).sensordata };
+        let mut sensordata: Vec<f64> = Vec::new();
+
+        println!("nsensordata: {}", self.nsensordata());
+
+        for i in 0..self.nsensordata() {
+            sensordata.push(unsafe { *raw_vec.add(i) });
+        }
+
+        sensordata
+    }
+
     /// Simulation time in seconds
     pub fn time(&self) -> f64 {
         unsafe {
@@ -592,6 +726,7 @@ impl MuJoCo {
         }
     }
 
+    /// Return a list of names used in a model
     pub fn names(&self) -> Vec<String> {
         let mj_model = &self.mj_model;
         let mj_model = unsafe { *mj_model.ptr() };
