@@ -24,6 +24,7 @@ pub struct MuJoCoPluginSettings {
     pub model_xml_path: String,
     pub model_assets_path: String,
     pub pause_simulation: bool,
+    pub target_fps: f64,
 }
 
 #[derive(Resource, Default)]
@@ -78,7 +79,7 @@ fn simulate_physics(
 
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / 60.0 {
+    while mujoco.time() - sim_start < 1.0 / settings.target_fps {
         mujoco.step();
     }
     // mujoco.evaluate_sensors();
