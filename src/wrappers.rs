@@ -709,8 +709,6 @@ impl MuJoCo {
         let raw_vec = unsafe { (*mj_data).sensordata };
         let mut sensordata: Vec<f64> = Vec::new();
 
-        println!("nsensordata: {}", self.nsensordata());
-
         for i in 0..self.nsensordata() {
             sensordata.push(unsafe { *raw_vec.add(i) });
         }

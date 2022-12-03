@@ -2,6 +2,7 @@ mod mujoco_shape;
 mod wrappers;
 
 use bevy::{ecs::system::EntityCommands, prelude::*, render::mesh::Mesh};
+use serde::Serialize;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -34,7 +35,7 @@ pub struct MuJoCoResources {
     pub control: MuJoCoControl,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Clone)]
 pub struct MuJoCoState {
     pub sensor_data: Vec<f64>,
     pub qpos: Vec<f64>,
@@ -56,7 +57,7 @@ impl Plugin for MuJoCoPlugin {
         let mujoco = MuJoCo::new_from_xml(map_plugin_settings.model_xml_path.as_str());
 
         app.insert_resource(mujoco);
-        app.add_system(simulate_physics);
+        app.add_system(simulate_physics.label("mujoco_simulate"));
         app.add_startup_system(setup_mujoco);
     }
 }
@@ -77,7 +78,7 @@ fn simulate_physics(
 
     // Target 60 fps in simulation
     let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / 60.0 {
+    while mujoco.time() - sim_start < 1.0 / 60000.0 {
         mujoco.step();
     }
     // mujoco.evaluate_sensors();
@@ -136,6 +137,10 @@ fn simulate_physics(
         let parent_rotation_inverse = parent_rotation.inverse();
         transform.translation = parent_rotation_inverse.mul_vec3(translation - parent_translation);
         transform.rotation = parent_rotation_inverse * rotation;
+        // this fixes flipped roll
+        // TODO: find better way
+        let euler = transform.rotation.to_euler(EulerRot::XYZ);
+        transform.rotation = Quat::from_euler(EulerRot::XYZ, -euler.0, -euler.1, euler.2);
 
         // Corrections due to way MuJoCo handles geometry
         match geom.geom_type {
