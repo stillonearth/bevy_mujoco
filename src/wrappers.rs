@@ -142,9 +142,7 @@ impl Geom {
     }
 
     pub fn translation(&self) -> Vec3 {
-        let translation = Vec3::new(self.pos[0] as f32, self.pos[2] as f32, self.pos[1] as f32);
-        println!("correction: {:?}", self.correction());
-        translation - self.correction()
+        Vec3::new(self.pos[0] as f32, self.pos[2] as f32, self.pos[1] as f32) - self.correction()
     }
 
     pub fn transform(&self) -> Transform {
