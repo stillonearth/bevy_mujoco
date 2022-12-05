@@ -134,7 +134,7 @@ impl Geom {
     /// bevy and mujoco treat object frame differently, this function converts
     pub fn correction(&self) -> Vec3 {
         match self.geom_type {
-            GeomType::BOX => Vec3::new(0.0, (self.size[1] / 2.0) as f32, 0.0),
+            GeomType::BOX => Vec3::new(0.0, (self.size[1] * 2.0) as f32, 0.0),
             GeomType::CAPSULE => Vec3::new(0.0, (self.size[1] * 2.0) as f32, 0.0),
             GeomType::CYLINDER => Vec3::new(0.0, (self.size[2] * 2.0) as f32, 0.0),
             _ => Vec3::ZERO,
@@ -143,6 +143,7 @@ impl Geom {
 
     pub fn translation(&self) -> Vec3 {
         let translation = Vec3::new(self.pos[0] as f32, self.pos[2] as f32, self.pos[1] as f32);
+        println!("correction: {:?}", self.correction());
         translation - self.correction()
     }
 

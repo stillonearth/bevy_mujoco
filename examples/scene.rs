@@ -31,7 +31,7 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
     for i in 0..mujoco_resources.control.number_of_controls {
         control[i] = rng.gen::<f64>();
     }
-    mujoco_resources.control.data = control;
+    // mujoco_resources.control.data = control;
 }
 
 fn main() {
@@ -39,9 +39,11 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(MuJoCoPluginSettings {
+            // model_xml_path: "assets/mujoco_menagerie/universal_robots_ur5e/scene.xml".to_string(),
             model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
-            pause_simulation: false,
-            target_fps: 120.0,
+            // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
+            pause_simulation: true,
+            target_fps: 120000.0,
         })
         .add_plugin(NoCameraPlayerPlugin)
         .insert_resource(MovementSettings {
