@@ -1,11 +1,6 @@
 # Bevy MuJoCo
 
-
-https://user-images.githubusercontent.com/97428129/204298761-18c3af03-4fd6-4c86-b173-afce432e7779.mp4
-
-
-https://user-images.githubusercontent.com/97428129/205291065-1e0fddac-6a87-49db-a7fd-3fe3845d3d6e.mp4
-
+![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
 
 _This is work in progress_
 
@@ -28,18 +23,4 @@ git submodule init
 git submodule update
 ```
 
-**Example**
-
-```rust
-use bevy_mujoco::{MuJoCoPlugin, MuJoCoPluginSettings};
-
-fn main (){
-    App::new()
-        .insert_resource(MuJoCoPluginSettings {
-            model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
-            model_assets_path: "assets/mujoco_menagerie/unitree_a1/assets/".to_string(),
-        })
-        .add_plugin(MuJoCoPlugin)
-        .run();
-}
-```
+See [example](https://github.com/stillonearth/bevy_mujoco/blob/main/examples/scene.rs) for simulating Unitree A1 robot.
