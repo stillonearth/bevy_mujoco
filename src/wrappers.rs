@@ -10,12 +10,10 @@ use bevy::{
         render_resource::PrimitiveTopology,
     },
 };
-use bevy_obj::load_obj_from_bytes;
 
 use mujoco_rs_sys::mjData;
 
-use std::{cmp::Ordering, fs::File};
-use std::{fs::metadata, io::Read};
+use std::cmp::Ordering;
 
 use crate::mujoco_shape;
 
@@ -66,7 +64,7 @@ pub struct Geom {
 
 impl Geom {
     /// Get bevy mesh for the body
-    pub fn mesh(&self, assets_path: String) -> Mesh {
+    pub fn mesh(&self) -> Mesh {
         match self.geom_type {
             GeomType::PLANE => {
                 let plane_size = if self.size[0] > 0.0 {
@@ -100,7 +98,7 @@ impl Geom {
                 ..default()
             }),
 
-            GeomType::MESH => self.mesh.clone().unwrap().mesh(assets_path),
+            GeomType::MESH => self.mesh.clone().unwrap().mesh(),
             // --- NOT IMPLEMENTED ---
             GeomType::NONE => todo!(),
             GeomType::HFIELD => todo!(),
@@ -108,12 +106,29 @@ impl Geom {
     }
 
     pub fn rotation(&self) -> Quat {
-        Quat::from_xyzw(
-            self.quat[1] as f32,
-            self.quat[0] as f32,
-            self.quat[2] as f32,
-            -self.quat[3] as f32,
-        )
+        match self.geom_type {
+            // TODO: simplify this
+            // irony: a rubick's cube rotation is a quaternion
+            GeomType::MESH => {
+                Quat::from_rotation_x(std::f32::consts::PI)
+                    * Quat::from_xyzw(
+                        self.quat[0] as f32,
+                        self.quat[1] as f32,
+                        self.quat[2] as f32,
+                        self.quat[3] as f32,
+                    )
+                    .inverse()
+                    * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
+                    * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)
+                    * Quat::from_rotation_y(std::f32::consts::PI)
+            }
+            _ => Quat::from_xyzw(
+                self.quat[1] as f32,
+                self.quat[0] as f32,
+                self.quat[2] as f32,
+                -self.quat[3] as f32,
+            ),
+        }
     }
 
     /// bevy and mujoco treat object frame differently, this function converts
@@ -225,26 +240,13 @@ pub struct MuJoCoMesh {
 
 impl MuJoCoMesh {
     /// This does not work correctly yet
-    pub fn _mesh(self) -> Mesh {
+    pub fn mesh(self) -> Mesh {
         let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
         // let mut uvs: Vec<[f32; 2]> = vec![];
         mesh.set_indices(Some(Indices::U32(self.indices)));
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, self.vertices);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, self.normals);
         mesh
-    }
-
-    pub fn mesh(self, assets_path: String) -> Mesh {
-        // load_obj_from_bytes
-
-        let filename = format!("{}/{}.obj", assets_path, self.name);
-        let metadata = metadata(&filename).expect("unable to read metadata");
-
-        let mut f = File::open(&filename).expect("no file found");
-        let mut buffer = vec![0; metadata.len() as usize];
-        f.read_exact(&mut buffer).expect("buffer overflow");
-
-        load_obj_from_bytes(&buffer).unwrap()
     }
 }
 
@@ -374,7 +376,7 @@ fn extract_mesh_attribute(array: *mut f32, offset: usize, count: usize) -> Vec<[
     let mut points: Vec<[f32; 3]> = vec![];
 
     let point_array =
-        unsafe { extract_vector_float_f32(array.add(offset) as *mut Local<f32>, 3, count) };
+        unsafe { extract_vector_float_f32(array.add(offset * 3) as *mut Local<f32>, 3, count) };
     for p in point_array.chunks(3) {
         let p: [f32; 3] = p.try_into().unwrap();
         points.push(p);
@@ -388,7 +390,7 @@ fn extract_indices(array: *mut i32, face_addr: usize, face_num: usize) -> Vec<u3
     let mut indices: Vec<u32> = vec![];
     for j in face_addr..face_addr + face_num {
         unsafe {
-            let face = array.add(j);
+            let face = array.add(j * 3);
             indices.push(*face.add(0) as u32);
             indices.push(*face.add(1) as u32);
             indices.push(*face.add(2) as u32);
@@ -913,11 +915,18 @@ impl MuJoCo {
         let mj_model = &self.mj_model;
         let mj_model = unsafe { *mj_model.ptr() };
 
+        println!("number of meshes: {}", self.nmesh());
+
         for i in 0..self.nmesh() {
             let vertadr = self.mesh_vertadr(i);
             let vertnum = self.mesh_vertnum(i);
             let faceadr = self.mesh_faceadr(i);
             let facenum = self.mesh_facenum(i);
+
+            // println!(
+            //     "i: {}, vertadr: {}, vertnum: {}, faceadr: {}, facenum: {}",
+            //     i, vertadr, vertnum, faceadr, facenum
+            // );
 
             // mesh data
             let vertices = extract_mesh_attribute(mj_model.mesh_vert, vertadr, vertnum);
