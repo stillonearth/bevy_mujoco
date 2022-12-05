@@ -39,8 +39,8 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(MuJoCoPluginSettings {
-            // model_xml_path: "assets/mujoco_menagerie/universal_robots_ur5e/scene.xml".to_string(),
-            model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
+            model_xml_path: "assets/mujoco_menagerie/universal_robots_ur5e/scene.xml".to_string(),
+            // model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
             pause_simulation: true,
             target_fps: 120000.0,
