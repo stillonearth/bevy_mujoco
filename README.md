@@ -1,5 +1,7 @@
 # Bevy MuJoCo
 
+![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
+
 _This is work in progress_
 
 Import MCJ files into Bevy and run simulations with MuJoCo.
