@@ -17,4 +17,10 @@ Import MCJ files into Bevy and run simulations with MuJoCo.
 
 To run tests and example initialize [`mujoco_menagerie`](https://github.com/deepmind/mujoco_menagerie) submobule with
 
+```bash
+cd bevy_mujoco
+git submodule init
+git submodule update
+```
+
 See [example](https://github.com/stillonearth/bevy_mujoco/blob/main/examples/scene.rs) for simulating Unitree A1 robot.
