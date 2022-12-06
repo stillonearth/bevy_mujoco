@@ -4,7 +4,7 @@
 
 _This is work in progress_
 
-Import MCJ files into Bevy and run simulations with MuJoCo.
+Import MJCF files into Bevy and run simulations with MuJoCo.
 
 ## Getting Started
 
