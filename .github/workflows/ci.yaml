@@ -38,7 +38,7 @@ jobs:
       - name: Install Dependencies
         run: sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
       - name: Install Mujoco
-        run: mkdir ~/.local; wget https://github.com/deepmind/mujoco/releases/download/2.3.0/mujoco-2.3.0-linux-x86_64.tar.gz; tar -xf mujoco-2.3.0-linux-x86_64.tar.gz -C ~/.local; mv ~/.local/mujoco-2.3.0/ ~/.local/mujoco; sudo cp ~/.local/mujoco/lib/libmujoco.so /usr/lib/libmujoco.so; sudo cp ~/.local/mujoco/lib/libmujoco.so.2.3.0 /usr/lib/libmujoco.so.2.3.0
+        run: wget https://github.com/deepmind/mujoco/releases/download/2.3.1/mujoco-2.3.1-linux-x86_64.tar.gz; tar -xf mujoco-2.3.1-linux-x86_64.tar.gz -C ~/.local; mv ~/.local/mujoco-2.3.1/ ~/.local/mujoco; sudo cp ~/.local/mujoco/lib/libmujoco.so /usr/lib/libmujoco.so; sudo cp ~/.local/mujoco/lib/libmujoco.so.2.3.1 /usr/lib/libmujoco.so.2.3.1
       - name: Run cargo test
         uses: actions-rs/cargo@v1
         with:
@@ -71,7 +71,7 @@ jobs:
       - name: Install Dependencies
         run: sudo apt-get update; sudo apt-get install pkg-config libx11-dev libasound2-dev libudev-dev
       - name: Install Mujoco
-        run: mkdir ~/.local; wget https://github.com/deepmind/mujoco/releases/download/2.3.0/mujoco-2.3.0-linux-x86_64.tar.gz; tar -xf mujoco-2.3.0-linux-x86_64.tar.gz -C ~/.local; mv ~/.local/mujoco-2.3.0/ ~/.local/mujoco; sudo cp ~/.local/mujoco/lib/libmujoco.so /usr/lib/libmujoco.so; sudo cp ~/.local/mujoco/lib/libmujoco.so.2.3.0 /usr/lib/libmujoco.so.2.3.0
+        run: wget https://github.com/deepmind/mujoco/releases/download/2.3.1/mujoco-2.3.1-linux-x86_64.tar.gz; tar -xf mujoco-2.3.1-linux-x86_64.tar.gz -C ~/.local; mv ~/.local/mujoco-2.3.1/ ~/.local/mujoco; sudo cp ~/.local/mujoco/lib/libmujoco.so /usr/lib/libmujoco.so; sudo cp ~/.local/mujoco/lib/libmujoco.so.2.3.1 /usr/lib/libmujoco.so.2.3.1
       - name: Run clippy
         uses: actions-rs/clippy-check@v1
         with:
