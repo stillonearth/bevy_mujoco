@@ -107,21 +107,12 @@ impl Geom {
 
     pub fn rotation(&self) -> Quat {
         match self.geom_type {
-            // TODO: simplify this
-            // irony: a rubick's cube rotation is a quaternion
-            GeomType::MESH => {
-                Quat::from_rotation_x(std::f32::consts::PI)
-                    * Quat::from_xyzw(
-                        self.quat[0] as f32,
-                        self.quat[1] as f32,
-                        self.quat[2] as f32,
-                        self.quat[3] as f32,
-                    )
-                    .inverse()
-                    * Quat::from_rotation_x(std::f32::consts::FRAC_PI_2)
-                    * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)
-                    * Quat::from_rotation_y(std::f32::consts::PI)
-            }
+            GeomType::MESH => Quat::from_xyzw(
+                self.quat[1] as f32,
+                self.quat[2] as f32,
+                self.quat[0] as f32,
+                self.quat[3] as f32,
+            ),
             _ => Quat::from_xyzw(
                 self.quat[1] as f32,
                 self.quat[0] as f32,

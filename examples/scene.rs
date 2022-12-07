@@ -42,7 +42,7 @@ fn main() {
             // model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
             model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
-            pause_simulation: true,
+            pause_simulation: false,
             target_fps: 120000.0,
         })
         // .add_plugin(NoCameraPlayerPlugin)

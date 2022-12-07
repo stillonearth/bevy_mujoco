@@ -193,7 +193,7 @@ fn setup_mujoco(
             let geom = geom.unwrap();
             let mesh = geom.mesh();
             let mut body_transform = body.transform();
-            let mut geom_transform = geom.transform();
+            let geom_transform = geom.transform();
 
             let mut binding: EntityCommands;
             {
@@ -210,7 +210,6 @@ fn setup_mujoco(
                     if geom.geom_type == GeomType::MESH {
                         body_transform.rotation =
                             Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                        geom_transform.rotation *= Quat::from_rotation_z(std::f32::consts::PI);
                     }
                 }
 
