@@ -448,7 +448,7 @@ pub struct MuJoCo {
 impl MuJoCo {
     /// Creates a wrapped mujoco model from an MJCF file
     pub fn new_from_xml(path: &str) -> Self {
-        let mj_model = ModelWrapper(mujoco_rust::Model::from_xml(path, true).unwrap());
+        let mj_model = ModelWrapper(mujoco_rust::Model::from_xml(path).unwrap());
         let mj_data = unsafe { mujoco_rs_sys::no_render::mj_makeData(mj_model.ptr()) };
         let mj_data = DataWrapper(mj_data);
 

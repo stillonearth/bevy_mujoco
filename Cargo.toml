@@ -3,19 +3,23 @@ name = "bevy_mujoco"
 version = "0.0.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+resolver = "2"
 
 [dependencies]
 arrayvec = "0.7.2"
 bevy = "0.9.0"
-mujoco-rs-sys = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "89affc5", default-features = false }
-mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "89affc5" }
+mujoco-rs-sys = { version = "0.0.3", git = "https://github.com/aaronlaw1215/MuJoCo-Rust.git", rev = "176410f", default-features = false }
+mujoco-rust = { version = "0.0.3", git = "https://github.com/aaronlaw1215/MuJoCo-Rust.git", rev = "176410f" }
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.10.5"
 
 [dev-dependencies]
 bevy-inspector-egui = { version = "0.14.0" }
-bevy_flycam = { git = "https://github.com/sburris0/bevy_flycam" }
+bevy_flycam = "0.9.0"
 pretty_assertions = "1.2.1"
 ron = "0.8"
 rand = "0.8.5"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
