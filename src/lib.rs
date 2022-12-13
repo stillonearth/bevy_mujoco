@@ -1,13 +1,16 @@
+mod adapters;
 mod mujoco_shape;
-mod wrappers;
 
 use bevy::{ecs::system::EntityCommands, prelude::*, render::mesh::Mesh};
 use serde::Serialize;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
-pub use crate::wrappers::*;
+use mujoco_rust::{self, Body, Geom, GeomType};
+
+use crate::adapters::*;
 
 #[derive(Component)]
 pub struct MuJoCoBody {
@@ -55,16 +58,29 @@ pub struct MuJoCoPlugin;
 impl Plugin for MuJoCoPlugin {
     fn build(&self, app: &mut App) {
         let map_plugin_settings = app.world.get_resource::<MuJoCoPluginSettings>().unwrap();
-        let mujoco = MuJoCo::new_from_xml(map_plugin_settings.model_xml_path.as_str());
+        let model =
+            mujoco_rust::Model::from_xml(map_plugin_settings.model_xml_path.as_str()).unwrap();
 
-        app.insert_resource(mujoco);
+        let simulation = MuJoCoSimulation::new(model);
+
+        app.insert_resource(simulation);
         app.add_system(simulate_physics.label("mujoco_simulate"));
         app.add_startup_system(setup_mujoco);
     }
 }
 
+#[derive(Deref, DerefMut, Resource)]
+pub struct MuJoCoSimulation(Arc<Mutex<mujoco_rust::Simulation>>);
+
+impl MuJoCoSimulation {
+    pub fn new(model: mujoco_rust::Model) -> Self {
+        let simulation = mujoco_rust::Simulation::new(model);
+        MuJoCoSimulation(Arc::new(Mutex::new(simulation)))
+    }
+}
+
 fn simulate_physics(
-    mujoco: ResMut<MuJoCo>,
+    mujoco: ResMut<MuJoCoSimulation>,
     settings: ResMut<MuJoCoPluginSettings>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
     mut mujoco_resources: ResMut<MuJoCoResources>,
@@ -73,12 +89,14 @@ fn simulate_physics(
         return;
     }
 
+    let mujoco = mujoco.lock().unwrap();
+
     // Set control data
     mujoco.control(&mujoco_resources.control.data);
 
     // Target 60 fps in simulation
-    let sim_start = mujoco.time();
-    while mujoco.time() - sim_start < 1.0 / settings.target_fps {
+    let sim_start = mujoco.state.time();
+    while mujoco.state.time() - sim_start < 1.0 / settings.target_fps {
         mujoco.step();
     }
 
@@ -107,16 +125,19 @@ fn simulate_physics(
         let pos = positions[body_id as usize];
         let ppos = positions[parent_body_id as usize];
         let rot = rotations[body_id as usize];
-        let parent_rot = rotations[parent_body_id as usize];
-        let translation = Vec3::new(pos[0] as f32, pos[1] as f32, pos[2] as f32);
-        let parent_translation = Vec3::new(ppos[0] as f32, ppos[1] as f32, ppos[2] as f32);
+        let prot = rotations[parent_body_id as usize];
+        let translation = Vec3::new(pos[0] as f32, pos[2] as f32, pos[1] as f32);
+        let parent_translation = Vec3::new(ppos[0] as f32, ppos[2] as f32, ppos[1] as f32);
+
+        let rot: [f64; 4] = [rot[3], rot[1], rot[2], rot[0]];
+        let prot: [f64; 4] = [prot[3], prot[1], prot[2], prot[0]];
 
         let rotation = Quat::from_xyzw(rot[1] as f32, rot[0] as f32, rot[2] as f32, -rot[3] as f32);
         let parent_rotation = Quat::from_xyzw(
-            parent_rot[1] as f32,
-            parent_rot[0] as f32,
-            parent_rot[2] as f32,
-            -parent_rot[3] as f32,
+            prot[1] as f32,
+            prot[0] as f32,
+            prot[2] as f32,
+            -prot[3] as f32,
         );
 
         // Converting from MuJoCo to Bevy coordinate system
@@ -138,7 +159,8 @@ fn simulate_physics(
                 transform.rotation = Quat::from_euler(EulerRot::XYZ, -euler.0, -euler.2, euler.1);
             }
             _ => {
-                transform.translation += geom.correction() - geom.correction() / 4.0;
+                let correction = (geom_correction(&geom)) * 3.0 / 4.0;
+                transform.translation += correction;
             }
         }
         if body.root_body && geom.geom_type == GeomType::MESH {
@@ -153,16 +175,17 @@ fn setup_mujoco(
     mut commands: Commands,
     meshes: ResMut<Assets<Mesh>>,
     materials: ResMut<Assets<StandardMaterial>>,
-    mujoco: Res<MuJoCo>,
+    mujoco: ResMut<MuJoCoSimulation>,
 ) {
-    let bodies = mujoco.bodies();
-    let geoms = mujoco.geoms();
+    let mujoco = mujoco.lock().unwrap();
+    let bodies = mujoco.model.bodies();
+    let geoms = mujoco.model.geoms();
 
     commands.insert_resource(MuJoCoResources {
         geoms: geoms.clone(),
-        bodies,
+        bodies: bodies.clone(),
         control: MuJoCoControl {
-            number_of_controls: mujoco.nu(),
+            number_of_controls: mujoco.model.nu(),
             ..default()
         },
         ..default()
@@ -190,10 +213,10 @@ fn setup_mujoco(
             if geom.is_none() {
                 return;
             }
-            let geom = geom.unwrap();
-            let mesh = geom.mesh();
-            let mut body_transform = body.transform();
-            let geom_transform = geom.transform();
+            let geom = &geom.unwrap();
+            let mesh = geom_mesh(geom);
+            let mut body_transform = body_transform(body);
+            let geom_transform = geom_transform(geom);
 
             let mut binding: EntityCommands;
             {
@@ -286,11 +309,12 @@ fn setup_mujoco(
     };
 
     let mut commands = commands.borrow_mut();
+    let body_tree = body_tree(&bodies);
     // each mujoco body is defined as a tree
     commands
         .spawn((Name::new("MuJoCo::world"), SpatialBundle::default()))
         .with_children(|child_builder| {
-            for body in mujoco.body_tree() {
+            for body in body_tree {
                 (spawn_entities.f)(&spawn_entities, body, child_builder, 0);
             }
         });

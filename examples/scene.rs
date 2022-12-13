@@ -10,7 +10,7 @@ fn setup(mut commands: Commands) {
         point_light: PointLight {
             intensity: 9000.0,
             range: 100.,
-            shadows_enabled: false,
+            shadows_enabled: true,
             ..default()
         },
         transform: Transform::from_xyz(8.0, 16.0, 8.0),
@@ -39,17 +39,16 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(MuJoCoPluginSettings {
-            // model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
-            model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
-            // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
+            model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
+            // model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             pause_simulation: false,
             target_fps: 120000.0,
         })
-        // .add_plugin(NoCameraPlayerPlugin)
-        // .insert_resource(MovementSettings {
-        //     speed: 1.0,
-        //     ..default()
-        // })
+        .add_plugin(NoCameraPlayerPlugin)
+        .insert_resource(MovementSettings {
+            speed: 1.0,
+            ..default()
+        })
         .add_plugin(MuJoCoPlugin)
         .add_startup_system(setup)
         .add_system(robot_control_loop)
