@@ -37,7 +37,7 @@ pub fn body_tree(bodies: &[Body]) -> Vec<BodyTree> {
 
     for body in root_bodies {
         let mut root_leaf: BodyTree = BodyTree(Tree::new(body.clone()));
-        collect_children(&mut root_leaf.0, &bodies);
+        collect_children(&mut root_leaf.0, bodies);
 
         trees.push(root_leaf);
     }
@@ -55,7 +55,7 @@ pub fn mujoco_mesh_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
 
 /// Adjust format of 3-Vec from Mujoco to bevy
 fn replace_values_vec3(arr: &[f64; 3], i1: usize, i2: usize) -> [f64; 3] {
-    let mut out = arr.clone();
+    let mut out = *arr;
     let c_1 = arr[i1];
     let c_2 = arr[i2];
     out[i1] = c_2;
