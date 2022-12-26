@@ -4,6 +4,10 @@ version = "0.0.2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 resolver = "2"
+description = "Use MuJoCo physics and MCJF / URDF scenes in bevy"
+keywords = ["mujoco", "bevy", "physics", "robotics"]
+repository = "https://github.com/stillonearth/bevy_rl"
+
 
 [dependencies]
 arrayvec = "0.7.2"
