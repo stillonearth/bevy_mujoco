@@ -53,19 +53,9 @@ pub fn mujoco_mesh_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
     mesh
 }
 
-/// Adjust format of 3-Vec from Mujoco to bevy
-fn replace_values_vec3(arr: &[f64; 3], i1: usize, i2: usize) -> [f64; 3] {
-    let mut out = *arr;
-    let c_1 = arr[i1];
-    let c_2 = arr[i2];
-    out[i1] = c_2;
-    out[i2] = c_1;
-    out
-}
-
 pub fn geom_mesh(geom: &Geom) -> Mesh {
     let size = &mut [geom.size.x, geom.size.y, geom.size.z];
-    let size = replace_values_vec3(&size, 1, 2);
+    size.swap(1, 2);
 
     match geom.geom_type {
         GeomType::PLANE => {
@@ -109,16 +99,16 @@ pub fn geom_mesh(geom: &Geom) -> Mesh {
 pub fn geom_rotation(geom: &Geom) -> Quat {
     match geom.geom_type {
         GeomType::MESH => Quat::from_xyzw(
-            geom.quat.i as f32,
-            geom.quat.k as f32,
-            geom.quat.j as f32,
-            geom.quat.w as f32,
+            geom.quat[1] as f32,
+            geom.quat[2] as f32,
+            geom.quat[3] as f32,
+            geom.quat[0] as f32,
         ),
         _ => Quat::from_xyzw(
-            geom.quat.i as f32,
-            geom.quat.j as f32,
-            geom.quat.k as f32,
-            -geom.quat.w as f32,
+            geom.quat[1] as f32,
+            geom.quat[3] as f32,
+            geom.quat[2] as f32,
+            -geom.quat[0] as f32,
         ),
     }
 }
@@ -126,7 +116,7 @@ pub fn geom_rotation(geom: &Geom) -> Quat {
 /// bevy and mujoco treat object frame differently, this function converts
 pub fn geom_correction(geom: &Geom) -> Vec3 {
     let size = &mut [geom.size.x, geom.size.y, geom.size.z];
-    let size = replace_values_vec3(&size, 1, 2);
+    size.swap(1, 2);
     match geom.geom_type {
         GeomType::BOX => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
         GeomType::CAPSULE => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
@@ -149,10 +139,10 @@ pub fn geom_transform(geom: &Geom) -> Transform {
 
 pub fn body_rotation(body: &Body) -> Quat {
     Quat::from_xyzw(
-        body.quat.i as f32,
-        body.quat.k as f32,
-        body.quat.j as f32,
-        -body.quat.w as f32,
+        body.quat[1] as f32,
+        body.quat[3] as f32,
+        body.quat[3] as f32,
+        -body.quat[0] as f32,
     )
 }
 

@@ -1,6 +1,4 @@
 use bevy::prelude::*;
-use bevy_flycam::*;
-use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_mujoco::*;
 
 use rand::Rng;
@@ -17,12 +15,10 @@ fn setup(mut commands: Commands) {
         ..default()
     });
 
-    commands
-        .spawn(Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 2.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
-            ..default()
-        })
-        .insert(FlyCam);
+    commands.spawn(Camera3dBundle {
+        transform: Transform::from_xyz(0.0, 2.0, 2.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
 }
 
 fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
@@ -37,18 +33,12 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(MuJoCoPluginSettings {
             // model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
             model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             pause_simulation: false,
-            target_fps: 120000.0,
+            target_fps: 300.0,
         })
-        // .add_plugin(NoCameraPlayerPlugin)
-        // .insert_resource(MovementSettings {
-        //     speed: 1.0,
-        //     ..default()
-        // })
         .add_plugin(MuJoCoPlugin)
         .add_startup_system(setup)
         .add_system(robot_control_loop)
