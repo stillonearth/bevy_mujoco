@@ -116,17 +116,22 @@ fn simulate_physics(
 
     let positions = mujoco.xpos();
     let rotations = mujoco.xquat();
+    let root_body_exists = bodies_query.iter_mut().any(|(_, _, body)| body.id == 0);
 
     for (_, mut transform, body) in bodies_query.iter_mut() {
-        let body_id = body.id as usize;
-        if body_id >= positions.len() {
-            continue;
+        let mut body_id = body.id as usize;
+        if !root_body_exists {
+            body_id -= 1;
         }
 
         let mj_body = mujoco_resources.bodies[body_id].clone();
         let body_id = mj_body.id;
         let parent_body_id = mj_body.parent_id;
-        let geom = mj_body.render_geom(&mujoco_resources.geoms).unwrap();
+        let geom = mj_body.render_geom(&mujoco_resources.geoms);
+        if geom.is_none() {
+            continue;
+        }
+        let geom = geom.unwrap();
 
         let bpos = positions[body_id as usize];
         let ppos = positions[parent_body_id as usize];
@@ -134,11 +139,26 @@ fn simulate_physics(
         let brot = rotations[body_id as usize];
         let prot = rotations[parent_body_id as usize];
 
-        let btran = Vec3::new(bpos.x as f32, bpos.z as f32, bpos.y as f32);
-        let ptran = Vec3::new(ppos.x as f32, ppos.z as f32, ppos.y as f32);
+        let btran = Vec3::new(bpos[0] as f32, bpos[2] as f32, bpos[1] as f32);
+        let mut ptran = Vec3::new(ppos[0] as f32, ppos[2] as f32, ppos[1] as f32);
 
-        let brod = Quat::from_xyzw(brot.i as f32, brot.k as f32, brot.j as f32, -brot.w as f32);
-        let prot = Quat::from_xyzw(prot.i as f32, prot.k as f32, prot.j as f32, -prot.w as f32);
+        let brod = Quat::from_xyzw(
+            brot[0] as f32,
+            brot[2] as f32,
+            brot[1] as f32,
+            -brot[3] as f32,
+        );
+        let mut prot = Quat::from_xyzw(
+            prot[0] as f32,
+            prot[2] as f32,
+            prot[1] as f32,
+            -prot[3] as f32,
+        );
+
+        if parent_body_id == 0 {
+            prot = Quat::IDENTITY;
+            ptran = Vec3::ZERO;
+        }
 
         // Converting from MuJoCo to Bevy coordinate system
         let parent_rotation_inverse = prot.inverse();
@@ -156,7 +176,7 @@ fn simulate_physics(
             GeomType::MESH => {
                 transform.translation.z *= -1.0;
                 let euler = transform.rotation.to_euler(EulerRot::XYZ);
-                transform.rotation = Quat::from_euler(EulerRot::XYZ, -euler.0, -euler.2, euler.1);
+                transform.rotation = Quat::from_euler(EulerRot::XZY, -euler.0, -euler.1, -euler.2);
             }
             _ => {
                 let correction = (geom_correction(&geom)) * 3.0 / 4.0;
