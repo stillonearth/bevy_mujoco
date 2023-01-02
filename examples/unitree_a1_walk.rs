@@ -32,7 +32,7 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
     for i in 0..mujoco_resources.control.number_of_controls {
         control[i] = 100.0 * rng.gen::<f64>();
     }
-    // mujoco_resources.control.data = control;
+    mujoco_resources.control.data = control;
 }
 
 fn main() {
@@ -42,16 +42,16 @@ fn main() {
         .insert_resource(MuJoCoPluginSettings {
             // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
             // * TODO: not correct / would crash because geom ids start with 1 unlike
-            //   in previous example becasue of no ground plane
+            //   in previous example because of no ground plane
             // model_xml_path: "assets/mjcf/simple_2.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_3.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
-            // model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
+            model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             // * TODO: not correct rendering in simulation `pause_simulation: false`
-            model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
-            pause_simulation: true,
+            // model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
+            pause_simulation: false,
             //pause_simulation: false,
-            // * TODO: FPS not corrent / no synchronization with physics time
+            // * TODO: FPS not correct / no synchronization with physics time
             target_fps: 600.0,
         })
         .add_plugin(NoCameraPlayerPlugin)
