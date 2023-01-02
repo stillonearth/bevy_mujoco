@@ -140,9 +140,9 @@ pub fn geom_transform(geom: &Geom) -> Transform {
 pub fn body_rotation(body: &Body) -> Quat {
     Quat::from_xyzw(
         body.quat[1] as f32,
+        body.quat[2] as f32,
         body.quat[3] as f32,
-        body.quat[3] as f32,
-        -body.quat[0] as f32,
+        body.quat[0] as f32,
     )
 }
 
