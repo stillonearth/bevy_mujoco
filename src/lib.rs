@@ -127,6 +127,7 @@ fn simulate_physics(
         let mj_body = mujoco_resources.bodies[body_id].clone();
         let body_id = mj_body.id;
         let parent_body_id = mj_body.parent_id;
+
         let geom = mj_body.render_geom(&mujoco_resources.geoms);
         if geom.is_none() {
             continue;
@@ -139,22 +140,12 @@ fn simulate_physics(
         let brot = rotations[body_id as usize];
         let prot = rotations[parent_body_id as usize];
 
-        let btran = Vec3::new(bpos[0] as f32, bpos[2] as f32, bpos[1] as f32);
+        let btran = Vec3::new(bpos[0] as f32, bpos[2] as f32, bpos[1] as f32)
+            - geom_correction(&geom) * 3.0 / 4.0 / 2.0;
         let mut ptran = Vec3::new(ppos[0] as f32, ppos[2] as f32, ppos[1] as f32);
 
-        let brod = Quat::from_xyzw(
-            brot[0] as f32,
-            brot[2] as f32,
-            brot[1] as f32,
-            -brot[3] as f32,
-        );
-        let mut prot = Quat::from_xyzw(
-            prot[0] as f32,
-            prot[2] as f32,
-            prot[1] as f32,
-            -prot[3] as f32,
-        );
-
+        let brot = quat_mujoco_2_bevy(brot);
+        let mut prot = quat_mujoco_2_bevy(prot);
         if parent_body_id == 0 {
             prot = Quat::IDENTITY;
             ptran = Vec3::ZERO;
@@ -168,18 +159,18 @@ fn simulate_physics(
             transform.translation =
                 Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2).mul_vec3(transform.translation);
         }
-        transform.rotation = parent_rotation_inverse * brod;
+        transform.rotation = parent_rotation_inverse * brot;
 
         // Corrections due to way MuJoCo handles geometry
         // TODO: find a nicer way to handle this
+        transform.translation.z *= -1.0;
         match geom.geom_type {
             GeomType::MESH => {
-                transform.translation.z *= -1.0;
                 let euler = transform.rotation.to_euler(EulerRot::XYZ);
-                transform.rotation = Quat::from_euler(EulerRot::XZY, -euler.0, -euler.1, -euler.2);
+                // transform.rotation = Quat::from_euler(EulerRot::XZY, -euler.0, -euler.1, -euler.2);
             }
             _ => {
-                let correction = (geom_correction(&geom)) * 3.0 / 4.0;
+                let correction = (geom_correction(&geom));
                 transform.translation += correction;
             }
         }
@@ -271,15 +262,7 @@ fn setup_mujoco(
                 binding.with_children(|children| {
                     let mut cmd = children.spawn(PbrBundle {
                         mesh: meshes.add(mesh),
-                        material: materials.add(StandardMaterial {
-                            base_color: Color::rgba(
-                                geom.color[0],
-                                geom.color[1],
-                                geom.color[2],
-                                geom.color[3],
-                            ),
-                            ..default()
-                        }),
+                        material: materials.add(geom_material(geom)),
                         transform: geom_transform,
                         ..default()
                     });

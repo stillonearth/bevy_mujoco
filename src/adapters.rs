@@ -3,6 +3,7 @@ use bevy::{
     render::{mesh::Indices, render_resource::PrimitiveTopology},
 };
 use mujoco_rust::{Body, Geom, GeomType};
+use nalgebra::Quaternion;
 use trees::Tree;
 
 use crate::mujoco_shape;
@@ -45,12 +46,35 @@ pub fn body_tree(bodies: &[Body]) -> Vec<BodyTree> {
     trees
 }
 
-pub fn mujoco_mesh_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
+pub fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     mesh.set_indices(Some(Indices::U32(mj_mesh.indices)));
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, mj_mesh.vertices);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, mj_mesh.normals);
     mesh
+}
+
+pub fn quat_mujoco_2_bevy(quat: Quaternion<f64>) -> Quat {
+    Quat::from_xyzw(
+        quat[2] as f32,
+        quat[1] as f32,
+        quat[3] as f32,
+        quat[0] as f32,
+    )
+}
+
+pub fn geom_material(geom: &Geom) -> StandardMaterial {
+    let mut material = StandardMaterial::default();
+
+    // Override color for ground plane
+    if geom.body_id == 0 {
+        material.base_color = Color::rgb(0.8, 0.4, 0.4);
+    } else {
+        material.base_color =
+            Color::rgba(geom.color[0], geom.color[1], geom.color[2], geom.color[3]);
+    }
+
+    material
 }
 
 pub fn geom_mesh(geom: &Geom) -> Mesh {
@@ -90,7 +114,7 @@ pub fn geom_mesh(geom: &Geom) -> Mesh {
             ..default()
         }),
 
-        GeomType::MESH => mujoco_mesh_2_bevy(geom.mesh.clone().unwrap()),
+        GeomType::MESH => mesh_mujoco_2_bevy(geom.mesh.clone().unwrap()),
         // --- NOT IMPLEMENTED ---
         _ => todo!(),
     }
@@ -118,7 +142,11 @@ pub fn geom_correction(geom: &Geom) -> Vec3 {
     let size = &mut [geom.size.x, geom.size.y, geom.size.z];
     size.swap(1, 2);
     match geom.geom_type {
-        GeomType::BOX => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
+        GeomType::BOX => Vec3::new(
+            0.0, // (size[0] * 2.0) as f32,
+            (size[2] * 2.0) as f32,
+            0.0, // (size[1] * 2.0) as f32,
+        ),
         GeomType::CAPSULE => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
         GeomType::CYLINDER => Vec3::new(0.0, (size[2] * 2.0) as f32, 0.0),
         _ => Vec3::ZERO,

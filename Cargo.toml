@@ -16,6 +16,7 @@ mujoco-rust = { version = "0.0.4" }
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.10.5"
+nalgebra = "0.31.4"
 
 [dev-dependencies]
 rand = "0.8.5"
