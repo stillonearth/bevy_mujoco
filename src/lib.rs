@@ -129,8 +129,8 @@ fn simulate_physics(
         let geom = geom.unwrap();
 
         let (body_pos, parent_body_pos) = (
-            positions[body_id as usize],
-            positions[parent_body_id as usize],
+            positions[body_id],
+            positions[parent_body_id],
         );
 
         let (body_rot, parent_prot) = (rotations[body_id], rotations[parent_body_id]);
