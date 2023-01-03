@@ -41,8 +41,7 @@ fn main() {
         .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(MuJoCoPluginSettings {
             // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
-            // * TODO: not correct / would crash because geom ids start with 1 unlike
-            //   in previous example because of no ground plane
+            // * TODO: this example will crash
             // model_xml_path: "assets/mjcf/simple_2.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_3.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_4.xml".to_string(),

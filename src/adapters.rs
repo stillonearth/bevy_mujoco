@@ -3,7 +3,7 @@ use bevy::{
     render::{mesh::Indices, render_resource::PrimitiveTopology},
 };
 use mujoco_rust::{Body, Geom, GeomType};
-use nalgebra::Quaternion;
+use nalgebra::{ArrayStorage, Const, Matrix, Quaternion};
 use trees::Tree;
 
 use crate::mujoco_shape;
@@ -56,6 +56,10 @@ pub fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
 
 pub fn quat_mujoco_2_bevy(quat: Quaternion<f64>) -> Quat {
     Quat::from_xyzw(quat.i as f32, quat.k as f32, quat.j as f32, quat.w as f32).inverse()
+}
+
+pub fn vec_mujoco_2_bevy(vec: Matrix<f64, Const<3>, Const<1>, ArrayStorage<f64, 3, 1>>) -> Vec3 {
+    Vec3::new(vec[0] as f32, vec[2] as f32, vec[1] as f32)
 }
 
 pub fn geom_material(geom: &Geom) -> StandardMaterial {

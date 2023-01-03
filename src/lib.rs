@@ -116,17 +116,11 @@ fn simulate_physics(
 
     let positions = mujoco.xpos();
     let rotations = mujoco.xquat();
-    let root_body_exists = bodies_query.iter_mut().any(|(_, _, body)| body.id == 0);
 
     for (_, mut transform, body) in bodies_query.iter_mut() {
-        let mut body_id = body.id as usize;
-        if !root_body_exists {
-            body_id -= 1;
-        }
-
+        let body_id = body.id as usize;
         let mj_body = mujoco_resources.bodies[body_id].clone();
-        let body_id = mj_body.id;
-        let parent_body_id = mj_body.parent_id;
+        let parent_body_id = mj_body.parent_id as usize;
 
         let geom = mj_body.render_geom(&mujoco_resources.geoms);
         if geom.is_none() {
@@ -134,28 +128,34 @@ fn simulate_physics(
         }
         let geom = geom.unwrap();
 
-        let bpos = positions[body_id as usize];
-        let ppos = positions[parent_body_id as usize];
+        let (body_pos, parent_body_pos) = (
+            positions[body_id as usize],
+            positions[parent_body_id as usize],
+        );
 
-        let brot = rotations[body_id as usize];
-        let prot = rotations[parent_body_id as usize];
+        let (body_rot, parent_prot) = (rotations[body_id], rotations[parent_body_id]);
 
-        let btran = Vec3::new(bpos[0] as f32, bpos[2] as f32, bpos[1] as f32)
-            - geom_correction(&geom) * 3.0 / 4.0 / 2.0;
-        let ptran = Vec3::new(ppos[0] as f32, ppos[2] as f32, ppos[1] as f32);
+        let (body_translation, parent_body_translation) = (
+            vec_mujoco_2_bevy(body_pos) - geom_correction(&geom) * 3.0 / 4.0 / 2.0,
+            vec_mujoco_2_bevy(parent_body_pos),
+        );
 
-        let brot = quat_mujoco_2_bevy(brot);
-        let prot = quat_mujoco_2_bevy(prot);
+        let (body_rot, parent_body_rot) = (
+            quat_mujoco_2_bevy(body_rot),
+            quat_mujoco_2_bevy(parent_prot),
+        );
 
         // Converting from MuJoCo to Bevy coordinate system
-        let parent_rotation_inverse = prot.inverse();
-        transform.translation = parent_rotation_inverse.mul_vec3(btran - ptran);
+        // following code makes rendering work ok
+        let parent_rotation_inverse = parent_body_rot.inverse();
+        transform.translation =
+            parent_rotation_inverse.mul_vec3(body_translation - parent_body_translation);
 
         if geom.geom_type == GeomType::MESH {
             transform.translation =
                 Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2).mul_vec3(transform.translation);
         }
-        transform.rotation = parent_rotation_inverse * brot;
+        transform.rotation = parent_rotation_inverse * body_rot;
 
         // Corrections due to way MuJoCo handles geometry
         match geom.geom_type {
