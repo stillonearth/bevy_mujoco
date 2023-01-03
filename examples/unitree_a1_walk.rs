@@ -45,15 +45,15 @@ fn main() {
             //   in previous example because of no ground plane
             // model_xml_path: "assets/mjcf/simple_2.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_3.xml".to_string(),
-            model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
-            // model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
+            // model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
+            model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
             // model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
             pause_simulation: false,
             //pause_simulation: false,
             // * TODO: FPS not correct / no synchronization with physics time
             target_fps: 600.0,
         })
-        // .add_plugin(NoCameraPlayerPlugin)
+        .add_plugin(NoCameraPlayerPlugin)
         .insert_resource(MovementSettings {
             speed: 1.0,
             ..default()

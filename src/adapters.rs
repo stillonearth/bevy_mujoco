@@ -56,10 +56,10 @@ pub fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
 
 pub fn quat_mujoco_2_bevy(quat: Quaternion<f64>) -> Quat {
     Quat::from_xyzw(
+        quat[0] as f32,
         quat[2] as f32,
         quat[1] as f32,
-        quat[3] as f32,
-        quat[0] as f32,
+        -quat[3] as f32,
     )
 }
 
