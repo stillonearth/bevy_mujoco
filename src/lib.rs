@@ -167,7 +167,7 @@ fn simulate_physics(
         match geom.geom_type {
             GeomType::MESH => {
                 let euler = transform.rotation.to_euler(EulerRot::XYZ);
-                // transform.rotation = Quat::from_euler(EulerRot::XZY, -euler.0, -euler.1, -euler.2);
+                transform.rotation = Quat::from_euler(EulerRot::XZY, -euler.0, -euler.1, -euler.2);
             }
             _ => {
                 let correction = (geom_correction(&geom));
