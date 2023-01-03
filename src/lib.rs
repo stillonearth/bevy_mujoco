@@ -142,14 +142,10 @@ fn simulate_physics(
 
         let btran = Vec3::new(bpos[0] as f32, bpos[2] as f32, bpos[1] as f32)
             - geom_correction(&geom) * 3.0 / 4.0 / 2.0;
-        let mut ptran = Vec3::new(ppos[0] as f32, ppos[2] as f32, ppos[1] as f32);
+        let ptran = Vec3::new(ppos[0] as f32, ppos[2] as f32, ppos[1] as f32);
 
         let brot = quat_mujoco_2_bevy(brot);
-        let mut prot = quat_mujoco_2_bevy(prot);
-        if parent_body_id == 0 {
-            prot = Quat::IDENTITY;
-            ptran = Vec3::ZERO;
-        }
+        let prot = quat_mujoco_2_bevy(prot);
 
         // Converting from MuJoCo to Bevy coordinate system
         let parent_rotation_inverse = prot.inverse();
@@ -162,15 +158,14 @@ fn simulate_physics(
         transform.rotation = parent_rotation_inverse * brot;
 
         // Corrections due to way MuJoCo handles geometry
-        // TODO: find a nicer way to handle this
-        transform.translation.z *= -1.0;
         match geom.geom_type {
             GeomType::MESH => {
+                transform.translation.z *= -1.0;
                 let euler = transform.rotation.to_euler(EulerRot::XYZ);
                 transform.rotation = Quat::from_euler(EulerRot::XZY, -euler.0, -euler.1, -euler.2);
             }
             _ => {
-                let correction = (geom_correction(&geom));
+                let correction = geom_correction(&geom);
                 transform.translation += correction;
             }
         }

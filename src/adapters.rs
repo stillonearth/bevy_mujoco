@@ -55,13 +55,7 @@ pub fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
 }
 
 pub fn quat_mujoco_2_bevy(quat: Quaternion<f64>) -> Quat {
-    Quat::from_rotation_y(std::f32::consts::FRAC_PI_2)
-        * Quat::from_xyzw(
-            quat[0] as f32,
-            quat[2] as f32,
-            quat[1] as f32,
-            -quat[3] as f32,
-        )
+    Quat::from_xyzw(quat.i as f32, quat.k as f32, quat.j as f32, quat.w as f32).inverse()
 }
 
 pub fn geom_material(geom: &Geom) -> StandardMaterial {
