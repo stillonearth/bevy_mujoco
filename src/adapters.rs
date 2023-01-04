@@ -8,11 +8,13 @@ use trees::Tree;
 
 use crate::mujoco_shape;
 
+/// BodyTree restructures bodie list into a tree structure
+/// All translations and quaternions are relative to the parent body
 #[derive(Deref, DerefMut)]
 pub struct BodyTree(pub Tree<Body>);
 
 /// Returns tree of bodies
-pub fn body_tree(bodies: &[Body]) -> Vec<BodyTree> {
+pub(crate) fn body_tree(bodies: &[Body]) -> Vec<BodyTree> {
     fn collect_children(parent_leaf: &mut Tree<Body>, bodies: &[Body]) {
         let parent_id = parent_leaf.data().id;
         let children: Vec<Body> = bodies
@@ -43,7 +45,8 @@ pub fn body_tree(bodies: &[Body]) -> Vec<BodyTree> {
     trees
 }
 
-pub fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
+/// Make a bevy mesh from exported MuJoCo mesh
+pub(crate) fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     mesh.set_indices(Some(Indices::U32(mj_mesh.indices)));
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, mj_mesh.vertices);
@@ -51,22 +54,28 @@ pub fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
     mesh
 }
 
-pub fn quat_mujoco_2_bevy(quat: Quaternion<f64>) -> Quat {
+/// Make bevy quaternion from MuJoCo quaternion
+pub(crate) fn quat_mujoco_2_bevy(quat: Quaternion<f64>) -> Quat {
     Quat::from_xyzw(quat.i as f32, quat.j as f32, quat.k as f32, quat.w as f32)
 }
 
-pub fn vec3_mujoco_2_bevy(vec: Matrix<f64, Const<3>, Const<1>, ArrayStorage<f64, 3, 1>>) -> Vec3 {
+/// Make bevy vector from MuJoCo vector
+pub(crate) fn vec3_mujoco_2_bevy(
+    vec: Matrix<f64, Const<3>, Const<1>, ArrayStorage<f64, 3, 1>>,
+) -> Vec3 {
     Vec3::new(vec.x as f32, vec.y as f32, vec.z as f32)
 }
 
-pub fn geom_material(geom: &Geom) -> StandardMaterial {
+/// Make bevy material from MuJoCo description
+pub(crate) fn geom_material(geom: &Geom) -> StandardMaterial {
     StandardMaterial {
         base_color: Color::rgba(geom.color[0], geom.color[1], geom.color[2], geom.color[3]),
         ..default()
     }
 }
 
-pub fn geom_mesh(geom: &Geom) -> Mesh {
+/// Return mesh for a given geometry (PLANE; BOX; SPHERE; CAPSULE; ELLIPSOID; CYLINDER; MESH)
+pub(crate) fn geom_mesh(geom: &Geom) -> Mesh {
     let size = &mut [geom.size.x as f32, geom.size.z as f32, geom.size.y as f32];
 
     match geom.geom_type {
@@ -103,7 +112,7 @@ pub fn geom_mesh(geom: &Geom) -> Mesh {
 }
 
 /// bevy and mujoco treat object frame differently, this function converts
-pub fn geom_correction(geom: &Geom) -> Vec3 {
+pub(crate) fn geom_correction(geom: &Geom) -> Vec3 {
     let size = &mut [geom.size.x, geom.size.z, geom.size.y];
 
     match geom.geom_type {
@@ -115,7 +124,8 @@ pub fn geom_correction(geom: &Geom) -> Vec3 {
     }
 }
 
-pub fn geom_transform(geom: &Geom) -> Transform {
+/// Return bevy transform for a given geometry from MuJoCo model
+pub(crate) fn geom_transform(geom: &Geom) -> Transform {
     let mut transform = Transform {
         translation: vec3_mujoco_2_bevy(geom.pos),
 
@@ -130,7 +140,8 @@ pub fn geom_transform(geom: &Geom) -> Transform {
     transform
 }
 
-pub fn body_transform(body: &Body) -> Transform {
+/// Return bevy transform for a given body from MuJoCo model
+pub(crate) fn body_transform(body: &Body) -> Transform {
     Transform {
         translation: vec3_mujoco_2_bevy(body.pos),
         rotation: quat_mujoco_2_bevy(body.quat),
