@@ -55,30 +55,22 @@ pub fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
 }
 
 pub fn quat_mujoco_2_bevy(quat: Quaternion<f64>) -> Quat {
-    Quat::from_xyzw(quat.i as f32, quat.k as f32, quat.j as f32, quat.w as f32).inverse()
+    Quat::from_xyzw(quat.i as f32, quat.j as f32, quat.k as f32, quat.w as f32)
 }
 
-pub fn vec_mujoco_2_bevy(vec: Matrix<f64, Const<3>, Const<1>, ArrayStorage<f64, 3, 1>>) -> Vec3 {
-    Vec3::new(vec[0] as f32, vec[2] as f32, vec[1] as f32)
+pub fn vec3_mujoco_2_bevy(vec: Matrix<f64, Const<3>, Const<1>, ArrayStorage<f64, 3, 1>>) -> Vec3 {
+    Vec3::new(vec.x as f32, vec.y as f32, vec.z as f32)
 }
 
 pub fn geom_material(geom: &Geom) -> StandardMaterial {
-    let mut material = StandardMaterial::default();
-
-    // Override color for ground plane
-    if geom.body_id == 0 {
-        material.base_color = Color::rgb(0.8, 0.4, 0.4);
-    } else {
-        material.base_color =
-            Color::rgba(geom.color[0], geom.color[1], geom.color[2], geom.color[3]);
+    StandardMaterial {
+        base_color: Color::rgba(geom.color[0], geom.color[1], geom.color[2], geom.color[3]),
+        ..default()
     }
-
-    material
 }
 
 pub fn geom_mesh(geom: &Geom) -> Mesh {
-    let size = &mut [geom.size.x, geom.size.y, geom.size.z];
-    size.swap(1, 2);
+    let size = &mut [geom.size.x, geom.size.z, geom.size.y];
 
     match geom.geom_type {
         GeomType::PLANE => {
@@ -119,68 +111,38 @@ pub fn geom_mesh(geom: &Geom) -> Mesh {
     }
 }
 
-pub fn geom_rotation(geom: &Geom) -> Quat {
-    match geom.geom_type {
-        GeomType::MESH => Quat::from_xyzw(
-            geom.quat[1] as f32,
-            geom.quat[2] as f32,
-            geom.quat[3] as f32,
-            geom.quat[0] as f32,
-        ),
-        _ => Quat::from_xyzw(
-            geom.quat[1] as f32,
-            geom.quat[3] as f32,
-            geom.quat[2] as f32,
-            -geom.quat[0] as f32,
-        ),
-    }
-}
+// pub fn geom_rotation(geom: &Geom) -> Quat {}
 
 /// bevy and mujoco treat object frame differently, this function converts
 pub fn geom_correction(geom: &Geom) -> Vec3 {
-    let size = &mut [geom.size.x, geom.size.y, geom.size.z];
-    size.swap(1, 2);
+    let size = &mut [geom.size.x, geom.size.z, geom.size.y];
+
     match geom.geom_type {
-        GeomType::BOX => Vec3::new(
-            0.0, // (size[0] * 2.0) as f32,
-            (size[2] * 2.0) as f32,
-            0.0, // (size[1] * 2.0) as f32,
-        ),
+        GeomType::BOX => Vec3::new(0.0, (size[1] / 2.0) as f32, 0.0),
         GeomType::CAPSULE => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
         GeomType::CYLINDER => Vec3::new(0.0, (size[2] * 2.0) as f32, 0.0),
         _ => Vec3::ZERO,
     }
 }
 
-pub fn geom_translation(geom: &Geom) -> Vec3 {
-    Vec3::new(geom.pos[0] as f32, geom.pos[1] as f32, geom.pos[2] as f32) - geom_correction(geom)
-}
-
 pub fn geom_transform(geom: &Geom) -> Transform {
-    Transform {
-        translation: geom_translation(geom),
-        rotation: geom_rotation(geom),
+    let mut transform = Transform {
+        translation: vec3_mujoco_2_bevy(geom.pos),
+        rotation: quat_mujoco_2_bevy(geom.quat),
         ..default()
+    };
+
+    if geom.geom_type != GeomType::MESH {
+        transform.rotation *= Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
     }
-}
 
-pub fn body_rotation(body: &Body) -> Quat {
-    Quat::from_xyzw(
-        body.quat[1] as f32,
-        body.quat[2] as f32,
-        body.quat[3] as f32,
-        body.quat[0] as f32,
-    )
-}
-
-pub fn body_translation(body: &Body) -> Vec3 {
-    Vec3::new(body.pos[0] as f32, body.pos[1] as f32, body.pos[2] as f32)
+    transform
 }
 
 pub fn body_transform(body: &Body) -> Transform {
     Transform {
-        translation: body_translation(body),
-        rotation: body_rotation(body),
+        translation: vec3_mujoco_2_bevy(body.pos),
+        rotation: quat_mujoco_2_bevy(body.quat),
         ..default()
     }
 }

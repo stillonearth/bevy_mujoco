@@ -15,7 +15,7 @@ use crate::adapters::*;
 #[derive(Component)]
 pub struct MuJoCoBody {
     pub id: i32,
-    root_body: bool,
+    pub root_body: bool,
 }
 
 #[derive(Component)]
@@ -129,12 +129,11 @@ fn simulate_physics(
         let geom = geom.unwrap();
 
         let (body_pos, parent_body_pos) = (positions[body_id], positions[parent_body_id]);
-
         let (body_rot, parent_prot) = (rotations[body_id], rotations[parent_body_id]);
 
         let (body_translation, parent_body_translation) = (
-            vec_mujoco_2_bevy(body_pos) - geom_correction(&geom) * 3.0 / 4.0 / 2.0,
-            vec_mujoco_2_bevy(parent_body_pos),
+            vec3_mujoco_2_bevy(body_pos),
+            vec3_mujoco_2_bevy(parent_body_pos),
         );
 
         let (body_rot, parent_body_rot) = (
@@ -143,33 +142,20 @@ fn simulate_physics(
         );
 
         // Converting from MuJoCo to Bevy coordinate system
-        // following code makes rendering work ok
         let parent_rotation_inverse = parent_body_rot.inverse();
         transform.translation =
             parent_rotation_inverse.mul_vec3(body_translation - parent_body_translation);
 
-        if geom.geom_type == GeomType::MESH {
-            transform.translation =
-                Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2).mul_vec3(transform.translation);
-        }
         transform.rotation = parent_rotation_inverse * body_rot;
 
-        // Corrections due to way MuJoCo handles geometry
-        match geom.geom_type {
-            GeomType::MESH => {
-                transform.translation.z *= -1.0;
-                let euler = transform.rotation.to_euler(EulerRot::XYZ);
-                transform.rotation = Quat::from_euler(EulerRot::XZY, -euler.0, -euler.1, -euler.2);
-            }
-            _ => {
-                let correction = geom_correction(&geom);
-                transform.translation += correction;
-            }
-        }
-        if body.root_body && geom.geom_type == GeomType::MESH {
+        if body.root_body {
             let correction = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
             transform.translation = correction.mul_vec3(transform.translation);
             transform.rotation = correction * transform.rotation;
+        }
+
+        if geom.geom_type != GeomType::MESH {
+            transform.translation -= geom_correction(&geom);
         }
     }
 }
@@ -226,17 +212,10 @@ fn setup_mujoco(
                 let mut materials = materials.borrow_mut();
                 let mut meshes = meshes.borrow_mut();
 
-                // Fixing coordinate system of MuJoCo for root body
                 if depth == 0 {
-                    let t_y = body_transform.translation.y;
-                    let t_z = body_transform.translation.z;
-                    body_transform.translation.z = t_y;
-                    body_transform.translation.y = t_z;
-
-                    if geom.geom_type == GeomType::MESH {
-                        body_transform.rotation =
-                            Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                    }
+                    let correction = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+                    body_transform.translation = correction.mul_vec3(body_transform.translation);
+                    body_transform.rotation = correction * body_transform.rotation;
                 }
 
                 binding = child_builder.spawn((

@@ -30,9 +30,9 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
     let mut rng = rand::thread_rng();
     let mut control: Vec<f64> = vec![0.0; mujoco_resources.control.number_of_controls];
     for i in 0..mujoco_resources.control.number_of_controls {
-        control[i] = 100.0 * rng.gen::<f64>();
+        control[i] = rng.gen::<f64>();
     }
-    // mujoco_resources.control.data = control;
+    mujoco_resources.control.data = control;
 }
 
 fn main() {
@@ -45,10 +45,10 @@ fn main() {
             // model_xml_path: "assets/mjcf/simple_2.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_3.xml".to_string(),
             // model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
-            // model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
-            model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
+            model_xml_path: "assets/mujoco_menagerie/unitree_a1/scene.xml".to_string(),
+            // model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
+            // pause_simulation: false,
             pause_simulation: false,
-            //pause_simulation: false,
             // * TODO: FPS not correct / no synchronization with physics time
             target_fps: 600.0,
         })
