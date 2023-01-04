@@ -133,8 +133,8 @@ fn simulate_physics(
         let (body_rot, parent_prot) = (rotations[body_id], rotations[parent_body_id]);
 
         let (body_translation, parent_body_translation) = (
-            vec_mujoco_2_bevy(body_pos) - geom_correction(&geom) * 3.0 / 4.0 / 2.0,
-            vec_mujoco_2_bevy(parent_body_pos),
+            vec3_mujoco_2_bevy(body_pos) - geom_correction(&geom) * 3.0 / 4.0 / 2.0,
+            vec3_mujoco_2_bevy(parent_body_pos),
         );
 
         let (body_rot, parent_body_rot) = (
