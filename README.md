@@ -23,4 +23,4 @@ git submodule init
 git submodule update
 ```
 
-See [example](https://github.com/stillonearth/bevy_mujoco/blob/main/examples/scene.rs) for simulating Unitree A1 robot.
+See [example](https://github.com/stillonearth/bevy_quadruped_neural_control) for simulating Unitree A1 robot.
