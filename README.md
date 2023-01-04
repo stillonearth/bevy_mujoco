@@ -6,8 +6,6 @@ _This is work in progress_
 
 Import MJCF files into Bevy and run simulations with MuJoCo.
 
-## Getting Started
-
 ## Implementation Notes
 
 MuJoCo has 2 modes with different coordinate systems for bodie.
@@ -15,6 +13,8 @@ MuJoCo has 2 modes with different coordinate systems for bodie.
 1. `paused` mode where all translations and rotations are extracted from `mj_Model` in `MuJoCo-Rust` as `body.pos`, `body.quat` in parent's body coordinate system. To make them work nice with bevy the body structure from mujoco has to be transformed to a tree structure with `body_tree()` call. Then `body_tree` is spawned into the bevy world recursively — a nice contraption to do it in `setup_mujoco`. 
 
 2. `simulation` mode where translations are extracted from `sim.xpos()` and `sim.xquat()` — and this time they are in global frame. Since bodies are spawned hierarchically translations and rotations need to be converted to a parent coordinate system — it happens in `simulate_physics`.
+
+## Getting Started
 
 ### Prerequisites
 
