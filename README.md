@@ -24,6 +24,39 @@ MuJoCo has 2 modes with different coordinate systems for bodies
 
 ### Usage
 
+```rust
+// 1. Import bevy_mujoco
+use bevy_mujoco::*;
+// 2. Setup bevy_mujoco Plugin. MuJoCo Plugin would spawn entities to the world
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins)
+        .insert_resource(MuJoCoPluginSettings {
+            model_xml_path: "assets/unitree_a1/scene.xml".to_string(),
+            pause_simulation: false,
+            target_fps: 600.0, // this is not actual fps (bug in bevy_mujoco),
+                               // the bigger the value, the slower the simulation
+        })        
+        .add_plugin(MuJoCoPlugin)
+        .add_startup_system(setup)
+        .add_system(robot_control_loop.after("mujoco_simulate"))
+        .run();
+}
+// 3. You can control your robots here
+fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
+    // prepare simulation data for the NN
+    let qpos = mujoco_resources.state.qpos.clone();
+    let qvel = mujoco_resources.state.qvel.clone();
+    let cfrc_ext = mujoco_resources.state.cfrc_ext.clone();
+
+    // Compute input -> control values here and fill control
+    // ...
+    let mut control: Vec<f32> = Vec::new(); 
+
+    mujoco_resources.control.data = input_vec;
+}
+```
+
 To run tests and example initialize [`mujoco_menagerie`](https://github.com/deepmind/mujoco_menagerie) submobule with
 
 ```bash
