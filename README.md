@@ -20,6 +20,7 @@ MuJoCo has 2 modes with different coordinate systems for bodies
 
 - `bevy` 0.9.0
 - `MuJoCo` 2.3.0 installed in `~/.local/mujoco` for Linux or `C:/Program Files/Mujoco` for Windows
+- *nightly* Rust. Compile with `cargo +nightly build`
 
 ### Usage
 
