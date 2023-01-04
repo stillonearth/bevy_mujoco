@@ -67,8 +67,7 @@ pub fn geom_material(geom: &Geom) -> StandardMaterial {
 }
 
 pub fn geom_mesh(geom: &Geom) -> Mesh {
-    let size = &mut [geom.size.x, geom.size.z, geom.size.y];
-
+    let size = &mut [geom.size.x as f32, geom.size.z as f32, geom.size.y as f32];
 
     match geom.geom_type {
         GeomType::PLANE => {
@@ -103,17 +102,6 @@ pub fn geom_mesh(geom: &Geom) -> Mesh {
     }
 }
 
-<<<<<<< HEAD
-/// bevy and mujoco treat object frame differently, this function converts
-pub fn geom_correction(geom: &Geom) -> Vec3 {
-    let size = &mut [geom.size.x, geom.size.y, geom.size.z];
-    match geom.geom_type {
-        GeomType::BOX => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
-        GeomType::CAPSULE => Vec3::new(0.0, (size[2] * 2.0) as f32, 0.0),
-        GeomType::CYLINDER => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
-=======
-// pub fn geom_rotation(geom: &Geom) -> Quat {}
-
 /// bevy and mujoco treat object frame differently, this function converts
 pub fn geom_correction(geom: &Geom) -> Vec3 {
     let size = &mut [geom.size.x, geom.size.z, geom.size.y];
@@ -122,19 +110,15 @@ pub fn geom_correction(geom: &Geom) -> Vec3 {
         GeomType::BOX => Vec3::new(0.0, (size[1] / 2.0) as f32, 0.0),
         GeomType::CAPSULE => Vec3::new(0.0, (size[1] * 2.0) as f32, 0.0),
         GeomType::CYLINDER => Vec3::new(0.0, (size[2] * 2.0) as f32, 0.0),
->>>>>>> 1b963a6
+
         _ => Vec3::ZERO,
     }
 }
 
 pub fn geom_transform(geom: &Geom) -> Transform {
-<<<<<<< HEAD
-    Transform {
-        translation: vec3_mujoco_2_bevy(geom.pos) - geom_correction(geom),
-=======
     let mut transform = Transform {
         translation: vec3_mujoco_2_bevy(geom.pos),
->>>>>>> 1b963a6
+
         rotation: quat_mujoco_2_bevy(geom.quat),
         ..default()
     };
@@ -143,12 +127,9 @@ pub fn geom_transform(geom: &Geom) -> Transform {
         transform.rotation *= Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
     }
 
-<<<<<<< HEAD
-=======
     transform
 }
 
->>>>>>> 1b963a6
 pub fn body_transform(body: &Body) -> Transform {
     Transform {
         translation: vec3_mujoco_2_bevy(body.pos),
