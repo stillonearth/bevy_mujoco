@@ -57,6 +57,8 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
 }
 ```
 
+**copy build.rs to root of your project to use in with Windows environments. it will copy mujoco.dll to a build dir of your application**
+
 To run tests and example initialize [`mujoco_menagerie`](https://github.com/deepmind/mujoco_menagerie) submobule with
 
 ```bash
