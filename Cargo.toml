@@ -11,7 +11,8 @@ repository = "https://github.com/stillonearth/bevy_rl"
 [dependencies]
 arrayvec = "0.7.2"
 bevy = "0.9.0"
-mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "67f4dd7" }
+# mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "67f4dd7" }
+mujoco-rust = { path = "../MuJoCo-Rust/mujoco" }
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.10.5"
