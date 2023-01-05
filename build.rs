@@ -40,7 +40,7 @@ fn main() {
 
             fs::create_dir_all(&target_dir).unwrap();
             let dest = Path::join(Path::new(&target_dir), Path::new("mujoco.dll"));
-            eprintln!("Copying {:?} to {:?}", src, dest);
+            eprintln!("Copying {src:?} to {dest:?}");
             std::fs::copy(src, dest).unwrap();
         }
     }
