@@ -1,5 +1,12 @@
 # Bevy MuJoCo
 
+[![Crates.io](https://img.shields.io/crates/v/bevy_mujoco.svg)](https://crates.io/crates/bevy_mujoco)
+[![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/bevyengine/bevy#license)
+[![Crates.io](https://img.shields.io/crates/d/bevy_mujoco.svg)](https://crates.io/crates/bevy_mujoco)
+[![Rust](https://github.com/stillonearth/bevy_mujoco/workflows/CI/badge.svg)](https://github.com/stillonearth/bevy_mujoco/actions)
+
+##
+
 ![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
 
 _This is work in progress_
