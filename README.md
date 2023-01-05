@@ -5,8 +5,7 @@
 [![Crates.io](https://img.shields.io/crates/d/bevy_mujoco.svg)](https://crates.io/crates/bevy_mujoco)
 [![Rust](https://github.com/stillonearth/bevy_mujoco/workflows/CI/badge.svg)](https://github.com/stillonearth/bevy_mujoco/actions)
 
-
-![image](https://github.com/stillonearth/bevy_rl/blob/main/img/dog.gif?raw=true)
+https://user-images.githubusercontent.com/97428129/210613348-82a5e59d-96af-42a9-a94a-c47093eb8297.mp4
 
 _This is work in progress_
 
