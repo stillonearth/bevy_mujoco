@@ -9,7 +9,7 @@ keywords = ["mujoco", "bevy", "physics", "robotics"]
 repository = "https://github.com/stillonearth/bevy_mujoco"
 
 [dependencies]
-mujoco-rust = { version = "0.0.4" }
+mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "26d5f7a" }
 arrayvec = "0.7.2"
 bevy = "0.10.0"
 trees = "0.4.1"
