@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use bevy_flycam::*;
-use bevy_inspector_egui::*;
 use bevy_mujoco::*;
 
 use rand::Rng;
@@ -38,7 +37,6 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(MuJoCoPluginSettings {
             // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
             // * TODO: this example will crash
@@ -59,6 +57,6 @@ fn main() {
         })
         .add_plugin(MuJoCoPlugin)
         .add_startup_system(setup)
-        .add_system(robot_control_loop)
+        .add_system(robot_control_loop.after(simulate_physics))
         .run();
 }

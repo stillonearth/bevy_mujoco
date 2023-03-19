@@ -64,7 +64,7 @@ impl Plugin for MuJoCoPlugin {
         let simulation = MuJoCoSimulation::new(model);
 
         app.insert_resource(simulation);
-        app.add_system(simulate_physics.label("mujoco_simulate"));
+        app.add_system(simulate_physics);
         app.add_startup_system(setup_mujoco);
     }
 }
@@ -79,7 +79,7 @@ impl MuJoCoSimulation {
     }
 }
 
-fn simulate_physics(
+pub fn simulate_physics(
     mujoco: ResMut<MuJoCoSimulation>,
     settings: ResMut<MuJoCoPluginSettings>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,

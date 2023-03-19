@@ -15,7 +15,7 @@ Import MJCF files into Bevy and run simulations with MuJoCo.
 
 MuJoCo has 2 modes with different coordinate systems for bodies
 
-1. `paused` mode where all translations and rotations are extracted from `mj_Model` in `MuJoCo-Rust` as `body.pos`, `body.quat` in parent's body coordinate system. To make them work nice with bevy the body structure from mujoco has to be transformed to a tree structure with `body_tree()` call. Then `body_tree` is spawned into the bevy world recursively — a nice contraption to do it in `setup_mujoco`. 
+1. `paused` mode where all translations and rotations are extracted from `mj_Model` in `MuJoCo-Rust` as `body.pos`, `body.quat` in parent's body coordinate system. To make them work nice with bevy the body structure from mujoco has to be transformed to a tree structure with `body_tree()` call. Then `body_tree` is spawned into the bevy world recursively — a nice contraption to do it in `setup_mujoco`.
 
 2. `simulation` mode where translations are extracted from `sim.xpos()` and `sim.xquat()` — and this time they are in global frame. Since bodies are spawned hierarchically translations and rotations need to be converted to a parent coordinate system — it happens in `simulate_physics`.
 
@@ -25,7 +25,7 @@ MuJoCo has 2 modes with different coordinate systems for bodies
 
 - `bevy` 0.9.0
 - `MuJoCo` 2.3.0 installed in `~/.local/mujoco` for Linux or `C:/Program Files/Mujoco` for Windows
-- *nightly* Rust. Compile with `cargo +nightly build`
+- _nightly_ Rust. Compile with `cargo +nightly build`
 
 ### Usage
 
@@ -41,10 +41,10 @@ fn main() {
             pause_simulation: false,
             target_fps: 600.0, // this is not actual fps (bug in bevy_mujoco),
                                // the bigger the value, the slower the simulation
-        })        
+        })
         .add_plugin(MuJoCoPlugin)
         .add_startup_system(setup)
-        .add_system(robot_control_loop.after("mujoco_simulate"))
+        .add_system(robot_control_loop)
         .run();
 }
 // 3. You can control your robots here
@@ -56,7 +56,7 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
 
     // Compute input -> control values here and fill control
     // ...
-    let mut control: Vec<f32> = Vec::new(); 
+    let mut control: Vec<f32> = Vec::new();
 
     mujoco_resources.control.data = input_vec;
 }

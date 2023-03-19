@@ -86,10 +86,13 @@ pub(crate) fn geom_mesh(geom: &Geom) -> Mesh {
                 // MuJoCo size 0 means infinite
                 1e6
             };
-            Mesh::from(shape::Plane { size: plane_size })
+            Mesh::from(shape::Plane {
+                size: plane_size,
+                subdivisions: 0,
+            })
         }
         GeomType::BOX => Mesh::from(shape::Box::new(size[0], size[1], size[2])),
-        GeomType::SPHERE => Mesh::from(shape::Icosphere {
+        GeomType::SPHERE => Mesh::from(shape::UVSphere {
             radius: size[0],
             ..default()
         }),
