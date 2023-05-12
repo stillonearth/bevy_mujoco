@@ -23,8 +23,8 @@ MuJoCo has 2 modes with different coordinate systems for bodies
 
 ### Prerequisites
 
-- `bevy` 0.9.0
-- `MuJoCo` 2.3.0 installed in `~/.local/mujoco` for Linux or `C:/Program Files/Mujoco` for Windows
+- `bevy` ~0.10.0
+- `MuJoCo` 2.3.5 installed in `~/.local/mujoco` for Linux or `C:/Program Files/Mujoco` for Windows
 - _nightly_ Rust. Compile with `cargo +nightly build`
 
 ### Usage
