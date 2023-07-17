@@ -1,6 +1,6 @@
 [package]
 name = "bevy_mujoco"
-version = "0.11-beta"
+version = "0.11.0-beta"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 resolver = "2"
