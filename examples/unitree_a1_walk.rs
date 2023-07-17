@@ -50,13 +50,13 @@ fn main() {
             // * TODO: FPS not correct / no synchronization with physics time
             target_fps: 600.0,
         })
-        .add_plugin(NoCameraPlayerPlugin)
+        .add_plugins(NoCameraPlayerPlugin)
         .insert_resource(MovementSettings {
             speed: 1.0,
             ..default()
         })
-        .add_plugin(MuJoCoPlugin)
-        .add_startup_system(setup)
-        .add_system(robot_control_loop.after(simulate_physics))
+        .add_plugins(MuJoCoPlugin)
+        .add_systems(Startup, setup)
+        .add_systems(Update, robot_control_loop.after(simulate_physics))
         .run();
 }

@@ -64,8 +64,8 @@ impl Plugin for MuJoCoPlugin {
         let simulation = MuJoCoSimulation::new(model);
 
         app.insert_resource(simulation);
-        app.add_system(simulate_physics);
-        app.add_startup_system(setup_mujoco);
+        app.add_systems(Update, simulate_physics);
+        app.add_systems(Startup, setup_mujoco);
     }
 }
 
