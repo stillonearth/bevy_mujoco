@@ -21,9 +21,7 @@ MuJoCo has 2 modes with different coordinate systems for bodies
 
 ## Getting Started
 
-### Prerequisites
-
-- `bevy` ~0.10.0
+### MuJoCo Dependency
 - `MuJoCo` 2.3.5 installed in `~/.local/mujoco` for Linux or `C:/Program Files/Mujoco` for Windows
 - _nightly_ Rust. Compile with `cargo +nightly build`
 

@@ -1,6 +1,6 @@
 [package]
 name = "bevy_mujoco"
-version = "0.11.0-beta"
+version = "0.12"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 resolver = "2"
@@ -11,7 +11,7 @@ repository = "https://github.com/stillonearth/bevy_mujoco"
 [dependencies]
 mujoco-rust = { version = "0.0.6" }
 arrayvec = "0.7.2"
-bevy = "~0.11.0"
+bevy = "0.12"
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.11.0"
@@ -19,4 +19,4 @@ nalgebra = "0.32.2"
 
 [dev-dependencies]
 rand = "0.8.5"
-bevy_flycam = { git = "https://github.com/NiklasEi/bevy_flycam.git", rev = "4ed8bce" }
+bevy_flycam = { git = "https://github.com/stillonearth/bevy_flycam.git", rev = "9508f35" }

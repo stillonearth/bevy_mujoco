@@ -255,7 +255,7 @@ fn setup_mujoco(
 
     // closure implementation
     let spawn_entities = SpawnEntities {
-        /// A function that spawn body into the current position in a tree
+        // A function that spawn body into the current position in a tree
         f: &|func, body, child_builder, depth| {
             let root_leaf = body.data();
 
