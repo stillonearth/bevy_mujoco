@@ -57,9 +57,10 @@ pub struct MuJoCoPlugin;
 
 impl Plugin for MuJoCoPlugin {
     fn build(&self, app: &mut App) {
-        let map_plugin_settings = app.world.get_resource::<MuJoCoPluginSettings>().unwrap();
+        let mj_plugin_settings = app.world.get_resource::<MuJoCoPluginSettings>().unwrap();
+
         let model =
-            mujoco_rust::Model::from_xml(map_plugin_settings.model_xml_path.as_str()).unwrap();
+            mujoco_rust::Model::from_xml(mj_plugin_settings.model_xml_path.as_str()).unwrap();
 
         let simulation = MuJoCoSimulation::new(model);
 

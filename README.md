@@ -7,8 +7,6 @@
 
 https://user-images.githubusercontent.com/97428129/210613348-82a5e59d-96af-42a9-a94a-c47093eb8297.mp4
 
-_This is work in progress_
-
 Import MJCF files into Bevy and run simulations with MuJoCo.
 
 ## Implementation Notes

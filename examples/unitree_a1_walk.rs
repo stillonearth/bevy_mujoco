@@ -1,3 +1,5 @@
+// This example runs mujoco_menagerie/unitree_a1/scene.xml simulation with random control
+
 use bevy::prelude::*;
 use bevy_flycam::*;
 use bevy_mujoco::*;
