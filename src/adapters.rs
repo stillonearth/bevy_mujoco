@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    render::{mesh::Indices, render_resource::PrimitiveTopology},
+    render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::PrimitiveTopology},
 };
 use mujoco_rust::{Body, Geom, GeomType};
 use nalgebra::{ArrayStorage, Const, Matrix, Quaternion};
@@ -47,8 +47,11 @@ pub(crate) fn body_tree(bodies: &[Body]) -> Vec<BodyTree> {
 
 /// Make a bevy mesh from exported MuJoCo mesh
 pub(crate) fn mesh_mujoco_2_bevy(mj_mesh: mujoco_rust::Mesh) -> Mesh {
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
-    mesh.set_indices(Some(Indices::U32(mj_mesh.indices)));
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+    );
+    mesh.insert_indices(Indices::U32(mj_mesh.indices));
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, mj_mesh.vertices);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, mj_mesh.normals);
     mesh
