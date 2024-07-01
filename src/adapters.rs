@@ -6,7 +6,7 @@ use mujoco_rust::{Body, Geom, GeomType};
 use nalgebra::{ArrayStorage, Const, Matrix, Quaternion};
 use trees::Tree;
 
-use crate::mujoco_shape;
+// use crate::mujoco_shape;
 
 /// BodyTree restructures bodie list into a tree structure
 /// All translations and quaternions are relative to the parent body
@@ -72,7 +72,7 @@ pub(crate) fn vec3_mujoco_2_bevy(
 /// Make bevy material from MuJoCo description
 pub(crate) fn geom_material(geom: &Geom) -> StandardMaterial {
     StandardMaterial {
-        base_color: Color::rgba(geom.color[0], geom.color[1], geom.color[2], geom.color[3]),
+        base_color: Color::srgba(geom.color[0], geom.color[1], geom.color[2], geom.color[3]),
         ..default()
     }
 }
@@ -83,31 +83,28 @@ pub(crate) fn geom_mesh(geom: &Geom) -> Mesh {
 
     match geom.geom_type {
         GeomType::PLANE => {
-            let plane_size = if size[0] > 0.0 {
+            let _plane_size = if size[0] > 0.0 {
                 size[0]
             } else {
                 // MuJoCo size 0 means infinite
                 1e6
             };
-            Mesh::from(shape::Plane {
-                size: plane_size,
-                subdivisions: 0,
-            })
+            Mesh::from(Plane3d::default())
         }
-        GeomType::BOX => Mesh::from(shape::Box::new(size[0], size[1], size[2])),
-        GeomType::SPHERE => Mesh::from(shape::UVSphere {
+        GeomType::BOX => Mesh::from(Cuboid::new(size[0], size[1], size[2])),
+        GeomType::SPHERE => Mesh::from(Sphere {
             radius: size[0],
             ..default()
         }),
-        GeomType::CAPSULE => Mesh::from(shape::Capsule {
+        GeomType::CAPSULE => Mesh::from(Capsule3d {
             radius: size[0],
-            depth: size[2] * 2.0,
+            half_length: size[2],
             ..default()
         }),
         GeomType::ELLIPSOID => todo!(),
-        GeomType::CYLINDER => Mesh::from(mujoco_shape::Cylinder {
+        GeomType::CYLINDER => Mesh::from(Cylinder {
             radius: size[0],
-            height: size[2] * 2.0,
+            half_height: size[2],
             ..default()
         }),
 
