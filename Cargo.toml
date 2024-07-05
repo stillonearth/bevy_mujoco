@@ -1,6 +1,6 @@
 [package]
 name = "bevy_mujoco"
-version = "0.14.0-rc.1"
+version = "0.14.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 resolver = "2"
@@ -11,7 +11,7 @@ repository = "https://github.com/stillonearth/bevy_mujoco"
 [dependencies]
 mujoco-rust = { version = "0.0.6" }
 arrayvec = "0.7.2"
-bevy = "0.14.0-rc.4"
+bevy = "0.14.0-"
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.13.0"
