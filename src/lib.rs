@@ -233,8 +233,8 @@ fn setup_mujoco(
 
                 binding.with_children(|children| {
                     let mut cmd = children.spawn(PbrBundle {
-                        mesh: meshes.add(mesh),
-                        material: materials.add(geom_material(geom)),
+                        mesh: Mesh3d(meshes.add(mesh)),
+                        material: MeshMaterial3d(materials.add(geom_material(geom))),
                         transform: geom_transform,
                         ..default()
                     });
