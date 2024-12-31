@@ -19,4 +19,4 @@ nalgebra = "0.33"
 
 [dev-dependencies]
 rand = "0.8.5"
-bevy_flycam = { git = "https://github.com/stillonearth/bevy_flycam.git", rev = "f5aa9c5" }
+bevy_flycam = "0.15.0"
