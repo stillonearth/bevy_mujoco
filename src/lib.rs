@@ -183,7 +183,7 @@ fn setup_mujoco(
 
     // This is a closure that can call itself recursively
     struct SpawnEntities<'s> {
-        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut ChildBuilder, usize),
+        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut ChildSpawnerCommands, usize),
     }
 
     impl SpawnEntities<'_> {
@@ -191,12 +191,12 @@ fn setup_mujoco(
         #[allow(clippy::too_many_arguments)]
         fn spawn_body(
             &self,
-            child_builder: &mut ChildBuilder,
+            child_builder: &mut ChildSpawnerCommands,
             body: &Body,
             geoms: &[Geom],
             meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
             materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
-            add_children: impl FnOnce(&mut ChildBuilder),
+            add_children: impl FnOnce(&mut ChildSpawnerCommands),
             depth: usize,
         ) {
             let geom = body.render_geom(geoms);
@@ -225,19 +225,16 @@ fn setup_mujoco(
                         root_body: depth == 0,
                     },
                     Name::new(format!("MuJoCo::body_{}", body.name)),
-                    SpatialBundle {
-                        transform: body_transform,
-                        ..default()
-                    },
+                    Visibility::default(),
+                    body_transform.clone(),
                 ));
 
                 binding.with_children(|children| {
-                    let mut cmd = children.spawn(PbrBundle {
-                        mesh: Mesh3d(meshes.add(mesh)),
-                        material: MeshMaterial3d(materials.add(geom_material(geom))),
-                        transform: geom_transform,
-                        ..default()
-                    });
+                    let mut cmd = children.spawn((
+                        Mesh3d(meshes.add(mesh)),
+                        MeshMaterial3d(materials.add(geom_material(geom))),
+                        geom_transform,
+                    ));
 
                     cmd.insert(Name::new(format!("MuJoCo::mesh_{}", body.name)));
                     if geom.geom_type == GeomType::MESH {
@@ -260,7 +257,7 @@ fn setup_mujoco(
         f: &|func, body, child_builder, depth| {
             let root_leaf = body.data();
 
-            let add_children = |child_builder: &mut ChildBuilder| {
+            let add_children = |child_builder: &mut ChildSpawnerCommands| {
                 let mut body = body.clone();
                 loop {
                     let leaf = body.pop_back();
@@ -287,7 +284,11 @@ fn setup_mujoco(
     let body_tree = body_tree(&bodies);
     // each mujoco body is defined as a tree
     commands
-        .spawn((Name::new("MuJoCo::world"), SpatialBundle::default()))
+        .spawn((
+            Name::new("MuJoCo::world"),
+            Transform::default(),
+            Visibility::default(),
+        ))
         .with_children(|child_builder| {
             for body in body_tree {
                 (spawn_entities.f)(&spawn_entities, body, child_builder, 0);

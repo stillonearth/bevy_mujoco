@@ -1,6 +1,6 @@
 [package]
 name = "bevy_mujoco"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 resolver = "2"
@@ -9,9 +9,9 @@ keywords = ["mujoco", "bevy", "physics", "robotics"]
 repository = "https://github.com/stillonearth/bevy_mujoco"
 
 [dependencies]
-mujoco-rust = { git="https://github.com/stillonearth/MuJoCo-Rust.git", rev="27d4500" }
+mujoco-rust = { git = "https://github.com/stillonearth/MuJoCo-Rust.git", rev = "27d4500" }
 arrayvec = "0.7.2"
-bevy = "0.15"
+bevy = "0.16"
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.13"
