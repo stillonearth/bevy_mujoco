@@ -1,7 +1,7 @@
 mod adapters;
 mod mujoco_shape;
 
-use bevy::{ecs::system::EntityCommands, prelude::*, render::mesh::Mesh};
+use bevy::{ecs::system::EntityCommands, mesh::Mesh, prelude::*};
 use serde::Serialize;
 
 use std::cell::RefCell;

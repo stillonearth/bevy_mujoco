@@ -1,12 +1,10 @@
 // Originally from https://github.com/bevyengine/bevy/pull/305/files
 
 use bevy::{
+    asset::RenderAssetUsages,
+    mesh::{Indices, Mesh},
     prelude::*,
-    render::{
-        mesh::{Indices, Mesh},
-        render_asset::RenderAssetUsages,
-        render_resource::PrimitiveTopology,
-    },
+    render::render_resource::PrimitiveTopology,
 };
 
 /// A cylinder which stands on the XZ plane
