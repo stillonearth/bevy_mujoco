@@ -9,13 +9,13 @@ keywords = ["mujoco", "bevy", "physics", "robotics"]
 repository = "https://github.com/stillonearth/bevy_mujoco"
 
 [dependencies]
-mujoco-rust = { path = "../mujoco-rust-local/mujoco" }
 arrayvec = "0.7.2"
 bevy = "0.17.2"
 trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.13"
 nalgebra = "0.33.1"
+mujoco-rs = "2.0.1"
 
 [dev-dependencies]
 rand = "0.8.5"

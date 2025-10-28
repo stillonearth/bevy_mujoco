@@ -6,10 +6,15 @@
 // - Control interface for actuators
 // - Body transform synchronization
 // - Geom-based visual representation with proper hierarchy
+// - ECS-first physics API
 //
 mod adapters;
 mod body;
 mod geom;
+pub mod physics;
+pub mod systems;
+pub mod builder;
+pub mod query_extensions;
 
 use bevy::prelude::*;
 pub use body::{Body, BodyNode};
