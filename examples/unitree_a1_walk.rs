@@ -35,18 +35,18 @@ fn robot_control_loop(mut mujoco_resources: ResMut<MuJoCoResources>) {
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .insert_resource(MuJoCoPluginSettings {
-            // model_xml_path: "assets/mjcf/simple_1.xml".to_string(),
-            // * TODO: this example will crash
-            // model_xml_path: "assets/mjcf/simple_2.xml".to_string(),
-            // model_xml_path: "assets/mjcf/simple_3.xml".to_string(),
-            // model_xml_path: "assets/mjcf/simple_4.xml".to_string(),
-            model_xml_path: "assets/unitree_a1/scene.xml".to_string(),
-            // model_xml_path: "assets/mujoco_menagerie/agility_cassie/scene.xml".to_string(),
-            // pause_simulation: false,
-            pause_simulation: false,
-            // * TODO: FPS not correct / no synchronization with physics time
-            target_fps: 600.0,
+        .insert_resource({
+            let mut settings = MuJoCoPluginSettings::from_file("assets/unitree_a1/scene.xml");
+            // Alternative paths for testing:
+            // settings.model_source = ModelSource::FilePath("assets/mjcf/simple_1.xml".to_string());
+            // settings.model_source = ModelSource::FilePath("assets/mjcf/simple_2.xml".to_string());
+            // settings.model_source = ModelSource::FilePath("assets/mjcf/simple_3.xml".to_string());
+            // settings.model_source = ModelSource::FilePath("assets/mjcf/simple_4.xml".to_string());
+            // settings.model_source = ModelSource::FilePath("assets/mujoco_menagerie/agility_cassie/scene.xml".to_string());
+            
+            settings.pause_simulation = false;
+            settings.target_fps = 600.0; // TODO: FPS not correct / no synchronization with physics time
+            settings
         })
         .add_plugins(NoCameraPlayerPlugin)
         .insert_resource(MovementSettings {

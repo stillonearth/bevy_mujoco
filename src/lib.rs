@@ -1,14 +1,23 @@
+// Updated bevy_mujoco with mujoco-rs 2.0 + Bevy 0.17.2
+//
+// This is a working implementation that provides:
+// - MuJoCo simulation integration with Bevy
+// - State tracking (qpos, qvel, cfrc_ext, sensor data)
+// - Control interface for actuators
+// - Body transform synchronization
+// - Geom-based visual representation with proper hierarchy
+//
 mod adapters;
-mod mujoco_shape;
+mod body;
+mod geom;
 
-use bevy::{ecs::system::EntityCommands, mesh::Mesh, prelude::*};
+use bevy::prelude::*;
+pub use body::{Body, BodyNode};
+pub use geom::{Geom, GeomType};
+use mujoco_rs::prelude::*;
+use mujoco_rs::mujoco_c::{mjModel, mjData};
 use serde::Serialize;
-
-use std::cell::RefCell;
-use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-
-use mujoco_rust::{self, Body, Geom, GeomType};
 
 use crate::adapters::*;
 
@@ -23,18 +32,56 @@ pub struct MuJoCoMesh {
     pub id: i32,
 }
 
+/// Source for loading a MuJoCo model
+#[derive(Clone)]
+pub enum ModelSource {
+    /// Load from a file path
+    FilePath(String),
+    /// Load from an XML string (uses VFS internally)
+    XmlString(String),
+}
+
+impl Default for ModelSource {
+    fn default() -> Self {
+        ModelSource::FilePath(String::new())
+    }
+}
+
 #[derive(Resource, Default)]
 pub struct MuJoCoPluginSettings {
-    pub model_xml_path: String,
+    pub model_source: ModelSource,
     pub pause_simulation: bool,
     pub target_fps: f64,
+}
+
+impl MuJoCoPluginSettings {
+    /// Create settings for loading from a file path
+    pub fn from_file(path: impl Into<String>) -> Self {
+        Self {
+            model_source: ModelSource::FilePath(path.into()),
+            pause_simulation: false,
+            target_fps: 60.0,
+        }
+    }
+    
+    /// Create settings for loading from an XML string
+    pub fn from_xml_string(xml: impl Into<String>) -> Self {
+        Self {
+            model_source: ModelSource::XmlString(xml.into()),
+            pause_simulation: false,
+            target_fps: 60.0,
+        }
+    }
+    
+    /// Backwards compatibility: load from model_xml_path
+    pub fn with_path(path: impl Into<String>) -> Self {
+        Self::from_file(path)
+    }
 }
 
 #[derive(Resource, Default)]
 pub struct MuJoCoResources {
     pub geoms: Vec<Geom>,
-    pub bodies: Vec<Body>,
-
     pub state: MuJoCoState,
     pub control: MuJoCoControl,
 }
@@ -53,15 +100,193 @@ pub struct MuJoCoControl {
     pub number_of_controls: usize,
 }
 
+#[derive(Resource)]
+pub struct MuJoCoSimulation {
+    pub model: Arc<MjModel>,
+    pub data: Arc<Mutex<MjData<Arc<MjModel>>>>,
+}
+
+impl MuJoCoSimulation {
+    /// Create a new simulation from a model
+    pub fn new(model: MjModel) -> Self {
+        let model = Arc::new(model);
+        let data = MjData::new(model.clone());
+        let data = Arc::new(Mutex::new(data));
+        
+        MuJoCoSimulation { model, data }
+    }
+    
+    /// Create a simulation by loading a model from a file path
+    pub fn from_file(path: impl AsRef<str>) -> Result<Self, String> {
+        let model = MjModel::from_xml(path.as_ref())
+            .map_err(|e| format!("Failed to load model from file: {}", e))?;
+        Ok(Self::new(model))
+    }
+    
+    /// Create a simulation by loading a model from an XML string
+    pub fn from_xml_string(xml: impl AsRef<str>) -> Result<Self, String> {
+        let model = MjModel::from_xml_string(xml.as_ref())
+            .map_err(|e| format!("Failed to load model from XML string: {}", e))?;
+        Ok(Self::new(model))
+    }
+    
+    /// Set control values (actuator inputs)
+    pub fn set_control(&self, control_data: &[f64]) {
+        let mut data = self.data.lock().unwrap();
+        let ctrl_slice = unsafe {
+            std::slice::from_raw_parts_mut(
+                data.ffi_mut().ctrl,
+                control_data.len(),
+            )
+        };
+        ctrl_slice.copy_from_slice(control_data);
+    }
+    
+    /// Step the simulation forward by one timestep
+    pub fn step(&self) {
+        let mut data = self.data.lock().unwrap();
+        data.step();
+    }
+    
+    /// Get current simulation time
+    pub fn time(&self) -> f64 {
+        let data = self.data.lock().unwrap();
+        data.ffi().time
+    }
+    
+    /// Get body positions (xpos)
+    pub fn xpos(&self) -> Vec<[f64; 3]> {
+        let data = self.data.lock().unwrap();
+        let ffi = data.ffi();
+        unsafe {
+            std::slice::from_raw_parts(
+                ffi.xpos as *const [f64; 3],
+                self.model.ffi().nbody as usize,
+            )
+        }.to_vec()
+    }
+    
+    /// Get body quaternions (xquat)
+    pub fn xquat(&self) -> Vec<[f64; 4]> {
+        let data = self.data.lock().unwrap();
+        let ffi = data.ffi();
+        unsafe {
+            std::slice::from_raw_parts(
+                ffi.xquat as *const [f64; 4],
+                self.model.ffi().nbody as usize,
+            )
+        }.to_vec()
+    }
+    
+    /// Get sensor data
+    pub fn sensordata(&self) -> Vec<f64> {
+        let data = self.data.lock().unwrap();
+        let ffi = data.ffi();
+        unsafe {
+            std::slice::from_raw_parts(
+                ffi.sensordata,
+                self.model.ffi().nsensordata as usize,
+            )
+        }.to_vec()
+    }
+    
+    /// Get generalized positions (qpos)
+    pub fn qpos(&self) -> Vec<f64> {
+        let data = self.data.lock().unwrap();
+        let ffi = data.ffi();
+        unsafe {
+            std::slice::from_raw_parts(
+                ffi.qpos,
+                self.model.ffi().nq as usize,
+            )
+        }.to_vec()
+    }
+    
+    /// Get generalized velocities (qvel)
+    pub fn qvel(&self) -> Vec<f64> {
+        let data = self.data.lock().unwrap();
+        let ffi = data.ffi();
+        unsafe {
+            std::slice::from_raw_parts(
+                ffi.qvel,
+                self.model.ffi().nv as usize,
+            )
+        }.to_vec()
+    }
+    
+    /// Get contact forces (cfrc_ext)
+    pub fn cfrc_ext(&self) -> Vec<[f64; 6]> {
+        let data = self.data.lock().unwrap();
+        let ffi = data.ffi();
+        unsafe {
+            std::slice::from_raw_parts(
+                ffi.cfrc_ext as *const [f64; 6],
+                self.model.ffi().nbody as usize,
+            )
+        }.to_vec()
+    }
+    
+    /// Direct access to the model FFI (for advanced use)
+    pub fn model_ffi(&self) -> &mjModel {
+        self.model.ffi()
+    }
+    
+    /// Direct access to the data FFI (for advanced use, requires locking)
+    pub fn with_data<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mjData) -> R,
+    {
+        let data = self.data.lock().unwrap();
+        f(data.ffi())
+    }
+    
+    /// Direct mutable access to the data FFI (for advanced use, requires locking)
+    pub fn with_data_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut mjData) -> R,
+    {
+        let mut data = self.data.lock().unwrap();
+        unsafe { f(data.ffi_mut()) }
+    }
+}
+
 pub struct MuJoCoPlugin;
 
 impl Plugin for MuJoCoPlugin {
     fn build(&self, app: &mut App) {
-        let mj_plugin_settings = app.world().get_resource::<MuJoCoPluginSettings>().unwrap();
+        let mj_plugin_settings = app
+            .world()
+            .get_resource::<MuJoCoPluginSettings>()
+            .expect("MuJoCoPluginSettings resource must be added before MuJoCoPlugin");
 
-        let model =
-            mujoco_rust::Model::from_xml(mj_plugin_settings.model_xml_path.as_str()).unwrap();
-
+        // Load the model based on the source type
+        let model = match &mj_plugin_settings.model_source {
+            ModelSource::FilePath(path) => {
+                MjModel::from_xml(path.as_str())
+                    .expect("Failed to load MuJoCo model from file")
+            }
+            ModelSource::XmlString(xml) => {
+                MjModel::from_xml_string(xml.as_str())
+                    .expect("Failed to load MuJoCo model from XML string")
+            }
+        };
+        
+        // Debug: Check immediately after loading
+        println!("🔍 Immediately after loading:");
+        println!("   model.ffi().ngeom = {}", model.ffi().ngeom);
+        println!("   model.ffi().nbody = {}", model.ffi().nbody);
+        println!("   model.ffi().nmesh = {}", model.ffi().nmesh);
+        println!("   model.ffi().njnt = {}", model.ffi().njnt);
+        
+        // Check if geom_type pointer is valid
+        unsafe {
+            if !model.ffi().geom_type.is_null() {
+                println!("   geom_type pointer: valid");
+            } else {
+                println!("   geom_type pointer: NULL!");
+            }
+        }
+        
         let simulation = MuJoCoSimulation::new(model);
 
         app.insert_resource(simulation);
@@ -70,19 +295,9 @@ impl Plugin for MuJoCoPlugin {
     }
 }
 
-#[derive(Deref, DerefMut, Resource)]
-pub struct MuJoCoSimulation(Arc<Mutex<mujoco_rust::Simulation>>);
-
-impl MuJoCoSimulation {
-    pub fn new(model: mujoco_rust::Model) -> Self {
-        let simulation = mujoco_rust::Simulation::new(model);
-        MuJoCoSimulation(Arc::new(Mutex::new(simulation)))
-    }
-}
-
 pub fn simulate_physics(
-    mujoco: ResMut<MuJoCoSimulation>,
-    settings: ResMut<MuJoCoPluginSettings>,
+    simulation: Res<MuJoCoSimulation>,
+    settings: Res<MuJoCoPluginSettings>,
     mut bodies_query: Query<(Entity, &mut Transform, &MuJoCoBody)>,
     mut mujoco_resources: ResMut<MuJoCoResources>,
 ) {
@@ -90,208 +305,232 @@ pub fn simulate_physics(
         return;
     }
 
-    let mujoco = mujoco.lock().unwrap();
-
-    // Set control data
-    mujoco.control(&mujoco_resources.control.data);
-
-    // Target 60 fps in simulation
-    let sim_start = mujoco.state.time();
-    while mujoco.state.time() - sim_start < 1.0 / settings.target_fps {
-        mujoco.step();
+    // Set control data using convenience method
+    if !mujoco_resources.control.data.is_empty() {
+        simulation.set_control(&mujoco_resources.control.data);
     }
 
-    let cfrc_ext = mujoco.cfrc_ext();
-    let cfrc_ext: Vec<[f64; 6]> = cfrc_ext
-        .iter()
-        .map(|e| [e[0], e[1], e[2], e[3], e[4], e[5]])
-        .collect();
+    // Target fps in simulation - step until we've advanced enough time
+    let sim_start = simulation.time();
+    while simulation.time() - sim_start < 1.0 / settings.target_fps {
+        simulation.step();
+    }
 
-    // Read Sensor data
+    // Read state data using convenience methods
     mujoco_resources.state = MuJoCoState {
-        sensor_data: mujoco.sensordata(),
-        qpos: mujoco.qpos(),
-        qvel: mujoco.qvel(),
-        cfrc_ext,
+        sensor_data: simulation.sensordata(),
+        qpos: simulation.qpos(),
+        qvel: simulation.qvel(),
+        cfrc_ext: simulation.cfrc_ext(),
     };
 
-    let positions = mujoco.xpos();
-    let rotations = mujoco.xquat();
+    // Get body transforms
+    let xpos = simulation.xpos();
+    let xquat = simulation.xquat();
+    let model_ffi = simulation.model_ffi();
+    
+    // Get body parent IDs for transform calculations
+    let body_parentid = unsafe {
+        std::slice::from_raw_parts(
+            model_ffi.body_parentid,
+            model_ffi.nbody as usize
+        )
+    };
 
+    // Update body transforms
     for (_, mut transform, body) in bodies_query.iter_mut() {
         let body_id = body.id as usize;
-        let mj_body = mujoco_resources.bodies[body_id].clone();
-        let parent_body_id = mj_body.parent_id as usize;
+        let parent_id = body_parentid[body_id] as usize;
 
-        let geom = mj_body.render_geom(&mujoco_resources.geoms);
-        if geom.is_none() {
-            continue;
-        }
-        let geom = geom.unwrap();
+        let body_pos = xpos[body_id];
+        let parent_pos = xpos[parent_id];
+        
+        let body_quat = xquat[body_id];
+        let parent_quat = xquat[parent_id];
 
-        let (body_pos, parent_body_pos) = (positions[body_id], positions[parent_body_id]);
-        let (body_rot, parent_prot) = (rotations[body_id], rotations[parent_body_id]);
-
-        let (body_translation, parent_body_translation) = (
-            vec3_mujoco_2_bevy(body_pos),
-            vec3_mujoco_2_bevy(parent_body_pos),
+        // Convert to Bevy types
+        let body_translation = Vec3::new(
+            body_pos[0] as f32,
+            body_pos[2] as f32,  // Swap Y and Z for Bevy
+            -body_pos[1] as f32,
+        );
+        
+        let parent_translation = Vec3::new(
+            parent_pos[0] as f32,
+            parent_pos[2] as f32,
+            -parent_pos[1] as f32,
         );
 
-        let (body_rot, parent_body_rot) = (
-            quat_mujoco_2_bevy(body_rot),
-            quat_mujoco_2_bevy(parent_prot),
+        // MuJoCo quaternions are [w, x, y, z]
+        let body_rot = Quat::from_xyzw(
+            body_quat[1] as f32,
+            body_quat[3] as f32,  // Swap Y and Z
+            -body_quat[2] as f32,
+            body_quat[0] as f32,
+        );
+        
+        let parent_rot = Quat::from_xyzw(
+            parent_quat[1] as f32,
+            parent_quat[3] as f32,
+            -parent_quat[2] as f32,
+            parent_quat[0] as f32,
         );
 
-        // Converting from MuJoCo to Bevy coordinate system
-        let parent_rotation_inverse = parent_body_rot.inverse();
-        transform.translation =
-            parent_rotation_inverse.mul_vec3(body_translation - parent_body_translation);
+        // Convert to parent-relative transform
+        let parent_rot_inv = parent_rot.inverse();
+        transform.translation = parent_rot_inv * (body_translation - parent_translation);
+        transform.rotation = parent_rot_inv * body_rot;
 
-        transform.rotation = parent_rotation_inverse * body_rot;
-
+        // Apply root body correction if needed
         if body.root_body {
             let correction = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-            transform.translation = correction.mul_vec3(transform.translation);
+            transform.translation = correction * transform.translation;
             transform.rotation = correction * transform.rotation;
-        }
-
-        if geom.geom_type != GeomType::MESH {
-            transform.translation -= geom_correction(&geom);
         }
     }
 }
 
 fn setup_mujoco(
     mut commands: Commands,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: ResMut<Assets<StandardMaterial>>,
-    mujoco: ResMut<MuJoCoSimulation>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    simulation: Res<MuJoCoSimulation>,
 ) {
-    let mujoco = mujoco.lock().unwrap();
-    let bodies = mujoco.model.bodies();
-    let geoms = mujoco.model.geoms();
-
-    commands.insert_resource(MuJoCoResources {
-        geoms: geoms.clone(),
-        bodies: bodies.clone(),
-        control: MuJoCoControl {
-            number_of_controls: mujoco.model.nu(),
-            ..default()
-        },
-        ..default()
-    });
-
-    // This is a closure that can call itself recursively
-    struct SpawnEntities<'s> {
-        f: &'s dyn Fn(&SpawnEntities, BodyTree, &mut ChildSpawnerCommands, usize),
+    let _data = simulation.data.lock().unwrap();
+    let model_ffi = simulation.model.ffi();
+    
+    println!("🔍 MuJoCo model FFI info:");
+    println!("   nbody: {}", model_ffi.nbody);
+    println!("   ngeom: {}", model_ffi.ngeom);
+    println!("   njnt: {}", model_ffi.njnt);
+    
+    // Get number of controls
+    let num_controls = model_ffi.nu as usize;
+    
+    // Extract all bodies and geoms from model
+    let bodies = Body::extract_all_bodies(model_ffi);
+    let geoms = Geom::extract_all_geoms(model_ffi);
+    
+    println!("🔧 Setup MuJoCo: {} bodies, {} geoms extracted", bodies.len(), geoms.len());
+    for (i, geom) in geoms.iter().enumerate() {
+        println!("   Geom {}: type={:?}, body_id={}", i, geom.geom_type, geom.body_id);
     }
-
-    impl SpawnEntities<'_> {
-        /// Spawn a bevy entity for MuJoCo body
-        #[allow(clippy::too_many_arguments)]
-        fn spawn_body(
-            &self,
-            child_builder: &mut ChildSpawnerCommands,
-            body: &Body,
-            geoms: &[Geom],
-            meshes: &Rc<RefCell<ResMut<Assets<Mesh>>>>,
-            materials: &Rc<RefCell<ResMut<Assets<StandardMaterial>>>>,
-            add_children: impl FnOnce(&mut ChildSpawnerCommands),
-            depth: usize,
-        ) {
-            let geom = body.render_geom(geoms);
-            if geom.is_none() {
-                return;
-            }
-            let geom = &geom.unwrap();
-            let mesh = geom_mesh(geom);
-            let mut body_transform = body_transform(body);
-            let geom_transform = geom_transform(geom);
-
-            let mut binding: EntityCommands;
-            {
-                let mut materials = materials.borrow_mut();
-                let mut meshes = meshes.borrow_mut();
-
-                if depth == 0 {
-                    let correction = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-                    body_transform.translation = correction.mul_vec3(body_transform.translation);
-                    body_transform.rotation = correction * body_transform.rotation;
-                }
-
-                binding = child_builder.spawn((
-                    MuJoCoBody {
-                        id: body.id,
-                        root_body: depth == 0,
-                    },
-                    Name::new(format!("MuJoCo::body_{}", body.name)),
-                    Visibility::default(),
-                    body_transform.clone(),
-                ));
-
-                binding.with_children(|children| {
-                    let mut cmd = children.spawn((
-                        Mesh3d(meshes.add(mesh)),
-                        MeshMaterial3d(materials.add(geom_material(geom))),
-                        geom_transform,
-                    ));
-
-                    cmd.insert(Name::new(format!("MuJoCo::mesh_{}", body.name)));
-                    if geom.geom_type == GeomType::MESH {
-                        cmd.insert(MuJoCoMesh { id: geom.id });
-                    }
-                });
-            }
-
-            binding.with_children(add_children);
+    
+    // Build body hierarchy
+    let body_hierarchy = body::build_body_hierarchy(&bodies, &geoms);
+    println!("🌳 Built hierarchy with {} root nodes", body_hierarchy.len());
+    
+    // Helper function to recursively spawn bodies with proper hierarchy
+    // We collect spawn operations into a flat list with depth information
+    #[derive(Clone)]
+    struct SpawnOp {
+        node: BodyNode,
+        depth: usize,
+    }
+    
+    fn collect_spawn_ops(node: &BodyNode, depth: usize) -> Vec<SpawnOp> {
+        let mut ops = vec![SpawnOp {
+            node: node.clone(),
+            depth,
+        }];
+        
+        for child in &node.children {
+            ops.extend(collect_spawn_ops(child, depth + 1));
         }
+        
+        ops
     }
-
-    let meshes = Rc::new(RefCell::new(meshes));
-    let materials = Rc::new(RefCell::new(materials));
-    let commands = Rc::new(RefCell::new(commands));
-
-    // closure implementation
-    let spawn_entities = SpawnEntities {
-        // A function that spawn body into the current position in a tree
-        f: &|func, body, child_builder, depth| {
-            let root_leaf = body.data();
-
-            let add_children = |child_builder: &mut ChildSpawnerCommands| {
-                let mut body = body.clone();
-                loop {
-                    let leaf = body.pop_back();
-                    if leaf.is_none() {
-                        return;
-                    }
-                    (func.f)(func, BodyTree(leaf.unwrap()), child_builder, depth + 1);
-                }
-            };
-
-            func.spawn_body(
-                child_builder,
-                root_leaf,
-                &geoms,
-                &meshes,
-                &materials,
-                add_children,
-                depth,
-            );
-        },
-    };
-
-    let mut commands = commands.borrow_mut();
-    let body_tree = body_tree(&bodies);
-    // each mujoco body is defined as a tree
-    commands
+    
+    // Collect all spawn operations in a flat list
+    let mut all_spawn_ops = Vec::new();
+    for root_node in &body_hierarchy {
+        all_spawn_ops.extend(collect_spawn_ops(root_node, 0));
+    }
+    
+    // Spawn world entity
+    let world_entity = commands
         .spawn((
-            Name::new("MuJoCo::world"),
+            Name::new("MuJoCo::World"),
             Transform::default(),
             Visibility::default(),
         ))
-        .with_children(|child_builder| {
-            for body in body_tree {
-                (spawn_entities.f)(&spawn_entities, body, child_builder, 0);
-            }
-        });
+        .id();
+    
+    // Now spawn entities level by level to maintain proper parent-child relationships
+    // Map body ID to entity ID
+    use std::collections::HashMap;
+    let mut body_to_entity: HashMap<i32, Entity> = HashMap::new();
+    body_to_entity.insert(0, world_entity); // World body maps to world entity
+    
+    // Process spawn operations in order (they're already sorted by depth via collect_spawn_ops)
+    for spawn_op in all_spawn_ops {
+        let node = &spawn_op.node;
+        let body = &node.body;
+        let body_id = body.id;
+        let depth = spawn_op.depth;
+        
+        // Get the transform for this body
+        let mut body_transform = body_transform(body);
+        
+        // Apply root body correction for world-attached bodies (depth 0)
+        let is_root = depth == 0;
+        if is_root {
+            let correction = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
+            body_transform.translation = correction * body_transform.translation;
+            body_transform.rotation = correction * body_transform.rotation;
+        }
+        
+        // Find parent entity
+        let parent_entity = body_to_entity.get(&body.parent_id).copied().unwrap_or(world_entity);
+        
+        // Spawn the body entity
+        let body_entity = commands
+            .spawn((
+                Name::new(format!("MuJoCo::Body::{}", body.name)),
+                body_transform,
+                Visibility::default(),
+                MuJoCoBody {
+                    id: body_id,
+                    root_body: is_root,
+                },
+            ))
+            .id();
+        
+        // Set parent relationship
+        commands.entity(parent_entity).add_child(body_entity);
+        
+        // Store this mapping for children
+        body_to_entity.insert(body_id, body_entity);
+        
+        // Spawn geoms as children of this body
+        for geom in &node.geoms {
+            let mesh = geom.to_mesh(Some(model_ffi));
+            let geom_transform = geom_transform(geom);
+            let material = geom_material(geom);
+            
+            let mesh_handle = meshes.add(mesh);
+            let material_handle = materials.add(material);
+            
+            let geom_entity = commands
+                .spawn((
+                    Name::new(format!("MuJoCo::Geom::{}", geom.id)),
+                    Mesh3d(mesh_handle),
+                    MeshMaterial3d(material_handle),
+                    geom_transform,
+                ))
+                .id();
+            
+            commands.entity(body_entity).add_child(geom_entity);
+        }
+    }
+    
+    // Insert resources after spawning
+    commands.insert_resource(MuJoCoResources {
+        geoms,
+        control: MuJoCoControl {
+            number_of_controls: num_controls,
+            data: vec![0.0; num_controls],
+        },
+        ..default()
+    });
 }
