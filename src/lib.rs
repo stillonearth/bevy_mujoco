@@ -361,12 +361,7 @@ pub fn simulate_physics(
         transform.translation = parent_rot_inv * (body_translation - parent_translation);
         transform.rotation = parent_rot_inv * body_rot;
 
-        // Apply root body correction if needed
-        if body.root_body {
-            let correction = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-            transform.translation = correction * transform.translation;
-            transform.rotation = correction * transform.rotation;
-        }
+        // No root body correction
     }
 }
 
@@ -446,6 +441,28 @@ fn setup_mujoco(
         ))
         .id();
 
+    // Spawn geoms attached to the world body (body_id == 0)
+    let world_geoms: Vec<Geom> = geoms.iter().filter(|g| g.body_id == 0).cloned().collect();
+    for geom in world_geoms {
+        let mesh = geom.to_mesh(Some(model_ffi));
+        let geom_transform = geom_transform(&geom);
+        let material = geom_material(&geom);
+
+        let mesh_handle = meshes.add(mesh);
+        let material_handle = materials.add(material);
+
+        let geom_entity = commands
+            .spawn((
+                Name::new(format!("MuJoCo::Geom::{}", geom.id)),
+                Mesh3d(mesh_handle),
+                MeshMaterial3d(material_handle),
+                geom_transform,
+            ))
+            .id();
+
+        commands.entity(world_entity).add_child(geom_entity);
+    }
+
     // Now spawn entities level by level to maintain proper parent-child relationships
     // Map body ID to entity ID
     use std::collections::HashMap;
@@ -462,13 +479,7 @@ fn setup_mujoco(
         // Get the transform for this body
         let mut body_transform = body_transform(body);
 
-        // Apply root body correction for world-attached bodies (depth 0)
         let is_root = depth == 0;
-        if is_root {
-            let correction = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2);
-            body_transform.translation = correction * body_transform.translation;
-            body_transform.rotation = correction * body_transform.rotation;
-        }
 
         // Find parent entity
         let parent_entity = body_to_entity

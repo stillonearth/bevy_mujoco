@@ -22,6 +22,7 @@ pub(crate) fn geom_material(geom: &Geom) -> StandardMaterial {
             geom.rgba[2],
             geom.rgba[3],
         ),
+        double_sided: matches!(geom.geom_type, crate::GeomType::Plane),
         ..default()
     }
 }
@@ -34,8 +35,8 @@ pub(crate) fn geom_transform(geom: &Geom) -> Transform {
         ..default()
     };
 
-    // Apply coordinate system conversion for non-mesh geoms
-    if geom.geom_type != GeomType::Mesh {
+    // Apply coordinate system conversion for non-mesh geoms, but not for planes
+    if geom.geom_type != GeomType::Mesh && geom.geom_type != GeomType::Plane {
         transform.rotation *= Quat::from_rotation_x(std::f32::consts::FRAC_PI_2);
     }
 
