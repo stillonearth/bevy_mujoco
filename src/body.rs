@@ -18,17 +18,13 @@ impl Body {
     pub fn from_model_ffi(model_ffi: &mjModel, body_id: usize) -> Self {
         unsafe {
             // Get parent ID
-            let parent_id_slice = std::slice::from_raw_parts(
-                model_ffi.body_parentid,
-                model_ffi.nbody as usize,
-            );
+            let parent_id_slice =
+                std::slice::from_raw_parts(model_ffi.body_parentid, model_ffi.nbody as usize);
             let parent_id = parent_id_slice[body_id];
 
             // Get body name
-            let name_adr = std::slice::from_raw_parts(
-                model_ffi.name_bodyadr,
-                model_ffi.nbody as usize,
-            );
+            let name_adr =
+                std::slice::from_raw_parts(model_ffi.name_bodyadr, model_ffi.nbody as usize);
             let names_ptr = model_ffi.names;
             let name_start = name_adr[body_id] as isize;
             let name_cstr = std::ffi::CStr::from_ptr(names_ptr.offset(name_start));
@@ -70,7 +66,7 @@ impl Body {
     pub fn position_to_bevy(&self) -> Vec3 {
         Vec3::new(
             self.pos[0] as f32,
-            self.pos[2] as f32,  // Swap Y and Z
+            self.pos[2] as f32, // Swap Y and Z
             -self.pos[1] as f32,
         )
     }
@@ -80,12 +76,12 @@ impl Body {
     pub fn rotation_to_bevy(&self) -> Quat {
         Quat::from_xyzw(
             self.quat[1] as f32,
-            self.quat[3] as f32,  // Swap Y and Z
+            self.quat[3] as f32, // Swap Y and Z
             -self.quat[2] as f32,
             self.quat[0] as f32,
         )
     }
-    
+
     /// Get all geoms associated with this body
     pub fn geoms(&self, all_geoms: &[Geom]) -> Vec<Geom> {
         all_geoms
@@ -94,7 +90,7 @@ impl Body {
             .cloned()
             .collect()
     }
-    
+
     /// Find the best geom for rendering this body
     /// This implements the same logic as the original mujoco-rust version:
     /// - If there's only one geom for this body, use it
@@ -102,51 +98,42 @@ impl Body {
     /// - Prioritize MESH type geoms over others
     /// - Among remaining geoms, prefer lower group numbers
     pub fn render_geom(&self, all_geoms: &[Geom]) -> Option<Geom> {
-        let body_geoms: Vec<&Geom> = all_geoms
-            .iter()
-            .filter(|g| g.body_id == self.id)
-            .collect();
-        
+        let body_geoms: Vec<&Geom> = all_geoms.iter().filter(|g| g.body_id == self.id).collect();
+
         // If there's only one geom, return it
         if body_geoms.len() == 1 {
             return Some(body_geoms[0].clone());
         }
-        
+
         if body_geoms.is_empty() {
             return None;
         }
-        
+
         // Filter to visual groups (0-2)
-        let visual_geoms: Vec<&Geom> = body_geoms
-            .iter()
-            .filter(|g| g.group < 3)
-            .copied()
-            .collect();
-        
+        let visual_geoms: Vec<&Geom> = body_geoms.iter().filter(|g| g.group < 3).copied().collect();
+
         if visual_geoms.is_empty() {
             // No visual geoms, just return the first one
             return Some(body_geoms[0].clone());
         }
-        
+
         // Sort by priority: MESH types first, then by lower group number
-        let best_geom = visual_geoms
-            .iter()
-            .max_by(|a, b| {
-                // Prefer MESH type
-                let a_is_mesh = a.geom_type == GeomType::Mesh;
-                let b_is_mesh = b.geom_type == GeomType::Mesh;
-                
-                if a_is_mesh && !b_is_mesh {
-                    return std::cmp::Ordering::Greater;
-                }
-                if !a_is_mesh && b_is_mesh {
-                    return std::cmp::Ordering::Less;
-                }
-                
-                // If both or neither are meshes, prefer lower group number
-                b.group.cmp(&a.group)
-            });
-        
+        let best_geom = visual_geoms.iter().max_by(|a, b| {
+            // Prefer MESH type
+            let a_is_mesh = a.geom_type == GeomType::Mesh;
+            let b_is_mesh = b.geom_type == GeomType::Mesh;
+
+            if a_is_mesh && !b_is_mesh {
+                return std::cmp::Ordering::Greater;
+            }
+            if !a_is_mesh && b_is_mesh {
+                return std::cmp::Ordering::Less;
+            }
+
+            // If both or neither are meshes, prefer lower group number
+            b.group.cmp(&a.group)
+        });
+
         best_geom.map(|g| (*g).clone())
     }
 }

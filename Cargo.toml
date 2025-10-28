@@ -15,7 +15,11 @@ trees = "0.4.1"
 serde = { version = "1", features = ["derive"] }
 itertools = "0.13"
 nalgebra = "0.33.1"
-mujoco-rs = "2.0.1"
+mujoco-rs = { path = "mujoco-rs-local" }
+#mujoco-rust  = { path = "../mujoco-rust-local/mujoco" }
+
+[build-dependencies]
+bindgen = "0.69"
 
 [dev-dependencies]
 rand = "0.8.5"

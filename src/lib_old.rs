@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
-use mujoco_rs::{self, prelude::*};
+use mujoco_rust::{self, prelude::*};
 
 use crate::adapters::*;
 
@@ -60,7 +60,7 @@ impl Plugin for MuJoCoPlugin {
         let mj_plugin_settings = app.world().get_resource::<MuJoCoPluginSettings>().unwrap();
 
         let model =
-            mujoco_rs::Model::from_xml(mj_plugin_settings.model_xml_path.as_str()).unwrap();
+            mujoco_rust::Model::from_xml(mj_plugin_settings.model_xml_path.as_str()).unwrap();
 
         let simulation = MuJoCoSimulation::new(model);
 
@@ -71,11 +71,11 @@ impl Plugin for MuJoCoPlugin {
 }
 
 #[derive(Deref, DerefMut, Resource)]
-pub struct MuJoCoSimulation(Arc<Mutex<mujoco_rs::Simulation>>);
+pub struct MuJoCoSimulation(Arc<Mutex<mujoco_rust::Simulation>>);
 
 impl MuJoCoSimulation {
-    pub fn new(model: mujoco_rs::Model) -> Self {
-        let simulation = mujoco_rs::Simulation::new(model);
+    pub fn new(model: mujoco_rust::Model) -> Self {
+        let simulation = mujoco_rust::Simulation::new(model);
         MuJoCoSimulation(Arc::new(Mutex::new(simulation)))
     }
 }

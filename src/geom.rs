@@ -58,16 +58,12 @@ impl Geom {
     /// Extract geom data from MuJoCo model FFI
     pub fn from_model_ffi(model_ffi: &mjModel, geom_id: usize) -> Self {
         unsafe {
-            let geom_type_slice = std::slice::from_raw_parts(
-                model_ffi.geom_type,
-                model_ffi.ngeom as usize,
-            );
+            let geom_type_slice =
+                std::slice::from_raw_parts(model_ffi.geom_type, model_ffi.ngeom as usize);
             let geom_type = GeomType::from(geom_type_slice[geom_id] as i32);
 
-            let body_id_slice = std::slice::from_raw_parts(
-                model_ffi.geom_bodyid,
-                model_ffi.ngeom as usize,
-            );
+            let body_id_slice =
+                std::slice::from_raw_parts(model_ffi.geom_bodyid, model_ffi.ngeom as usize);
             let body_id = body_id_slice[geom_id];
 
             let size_slice = std::slice::from_raw_parts(
@@ -94,16 +90,12 @@ impl Geom {
             );
             let rgba = rgba_slice[geom_id];
 
-            let dataid_slice = std::slice::from_raw_parts(
-                model_ffi.geom_dataid,
-                model_ffi.ngeom as usize,
-            );
+            let dataid_slice =
+                std::slice::from_raw_parts(model_ffi.geom_dataid, model_ffi.ngeom as usize);
             let dataid = dataid_slice[geom_id];
 
-            let group_slice = std::slice::from_raw_parts(
-                model_ffi.geom_group,
-                model_ffi.ngeom as usize,
-            );
+            let group_slice =
+                std::slice::from_raw_parts(model_ffi.geom_group, model_ffi.ngeom as usize);
             let group = group_slice[geom_id];
 
             Geom {
@@ -161,7 +153,11 @@ impl Geom {
 
 /// Create a box mesh with MuJoCo-style sizing (half-extents)
 fn create_box_mesh(size: [f64; 3]) -> Mesh {
-    let size = Vec3::new(size[0] as f32 * 2.0, size[1] as f32 * 2.0, size[2] as f32 * 2.0);
+    let size = Vec3::new(
+        size[0] as f32 * 2.0,
+        size[1] as f32 * 2.0,
+        size[2] as f32 * 2.0,
+    );
     Mesh::from(Cuboid::from_size(size))
 }
 
@@ -197,7 +193,7 @@ fn create_ellipsoid_mesh(size: [f64; 3]) -> Mesh {
 fn create_plane_mesh(size: [f64; 3]) -> Mesh {
     let size_x = size[0] as f32 * 10.0; // MuJoCo planes are usually large
     let size_z = size[1] as f32 * 10.0;
-    
+
     Mesh::from(Plane3d {
         normal: Dir3::Y,
         half_size: Vec2::new(size_x, size_z),
@@ -206,37 +202,29 @@ fn create_plane_mesh(size: [f64; 3]) -> Mesh {
 
 /// Create a mesh from MuJoCo mesh data
 fn create_mesh_from_mujoco(model_ffi: &mjModel, mesh_id: usize) -> Mesh {
+    use bevy::asset::RenderAssetUsages;
     use bevy::mesh::Indices;
     use bevy::render::render_resource::PrimitiveTopology;
-    use bevy::asset::RenderAssetUsages;
-    
+
     unsafe {
         // Get mesh metadata
-        let mesh_vertadr = std::slice::from_raw_parts(
-            model_ffi.mesh_vertadr,
-            model_ffi.nmesh as usize,
-        );
-        let mesh_vertnum = std::slice::from_raw_parts(
-            model_ffi.mesh_vertnum,
-            model_ffi.nmesh as usize,
-        );
-        let mesh_faceadr = std::slice::from_raw_parts(
-            model_ffi.mesh_faceadr,
-            model_ffi.nmesh as usize,
-        );
-        let mesh_facenum = std::slice::from_raw_parts(
-            model_ffi.mesh_facenum,
-            model_ffi.nmesh as usize,
-        );
+        let mesh_vertadr =
+            std::slice::from_raw_parts(model_ffi.mesh_vertadr, model_ffi.nmesh as usize);
+        let mesh_vertnum =
+            std::slice::from_raw_parts(model_ffi.mesh_vertnum, model_ffi.nmesh as usize);
+        let mesh_faceadr =
+            std::slice::from_raw_parts(model_ffi.mesh_faceadr, model_ffi.nmesh as usize);
+        let mesh_facenum =
+            std::slice::from_raw_parts(model_ffi.mesh_facenum, model_ffi.nmesh as usize);
         let vert_start = mesh_vertadr[mesh_id] as usize;
         let vert_count = mesh_vertnum[mesh_id] as usize;
         let face_start = mesh_faceadr[mesh_id] as usize;
         let face_count = mesh_facenum[mesh_id] as usize;
-        
+
         println!("🔍 Mesh {} extraction:", mesh_id);
         println!("   vert_start={}, vert_count={}", vert_start, vert_count);
         println!("   face_start={}, face_count={}", face_start, face_count);
-        
+
         // Extract vertex positions
         let mesh_vert = std::slice::from_raw_parts(
             model_ffi.mesh_vert as *const [f32; 3],
@@ -246,9 +234,9 @@ fn create_mesh_from_mujoco(model_ffi: &mjModel, mesh_id: usize) -> Mesh {
             .iter()
             .copied()
             .collect();
-        
+
         println!("   Extracted {} vertices", vertices.len());
-        
+
         // Extract normals (normals use the same indexing as vertices)
         let mesh_normal = std::slice::from_raw_parts(
             model_ffi.mesh_normal as *const [f32; 3],
@@ -258,44 +246,51 @@ fn create_mesh_from_mujoco(model_ffi: &mjModel, mesh_id: usize) -> Mesh {
             .iter()
             .copied()
             .collect();
-        
+
         println!("   Extracted {} normals", normals.len());
-        
+
         // Extract face indices (triangles)
         // NOTE: mesh_face contains absolute vertex indices, so we need to make them relative
         let mesh_face = std::slice::from_raw_parts(
             model_ffi.mesh_face as *const i32,
             model_ffi.nmeshface as usize * 3,
         );
-        
+
         let mut indices: Vec<u32> = Vec::with_capacity(face_count * 3);
         for i in 0..face_count {
             let face_idx = (face_start + i) * 3;
             let idx0 = mesh_face[face_idx] as i32;
             let idx1 = mesh_face[face_idx + 1] as i32;
             let idx2 = mesh_face[face_idx + 2] as i32;
-            
+
             // Make indices relative to this mesh's vertex array
             indices.push((idx0 - vert_start as i32) as u32);
             indices.push((idx1 - vert_start as i32) as u32);
             indices.push((idx2 - vert_start as i32) as u32);
         }
-        
-        println!("   Extracted {} indices ({} faces)", indices.len(), face_count);
+
+        println!(
+            "   Extracted {} indices ({} faces)",
+            indices.len(),
+            face_count
+        );
         if !indices.is_empty() {
-            println!("   First face indices: [{}, {}, {}]", indices[0], indices[1], indices[2]);
+            println!(
+                "   First face indices: [{}, {}, {}]",
+                indices[0], indices[1], indices[2]
+            );
         }
-        
+
         // Create Bevy mesh
         let mut mesh = Mesh::new(
             PrimitiveTopology::TriangleList,
             RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
         );
-        
+
         mesh.insert_indices(Indices::U32(indices));
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, vertices);
         mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-        
+
         mesh
     }
 }

@@ -52,6 +52,7 @@ pub(crate) fn body_transform(body: &Body) -> Transform {
 }
 
 /// Bevy and MuJoCo treat object frames differently, this function provides correction
+#[allow(dead_code)]
 pub(crate) fn geom_correction(geom: &Geom) -> Vec3 {
     let size = geom.size;
     

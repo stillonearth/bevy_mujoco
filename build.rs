@@ -14,6 +14,9 @@ fn get_output_path() -> PathBuf {
 }
 
 fn main() {
+    // This build script is mainly for Windows DLL copying
+    // The mujoco-rs crate handles the actual linking via MUJOCO_DYNAMIC_LINK_DIR
+    
     let (_, _, default_install) = match env::var("CARGO_CFG_UNIX") {
         Ok(_) => ("", "", ""),
         _ => match env::var("CARGO_CFG_WINDOWS") {
@@ -27,6 +30,14 @@ fn main() {
             (Ok(dir), _) | (Err(..), Ok(dir)) => dir,
             (Err(..), Err(..)) => default_install.to_string(),
         };
+        
+        // Default to ~/.mujoco/mujoco-3.3.7 if not set
+        let mj_root = if mj_root.is_empty() {
+            format!("{}/.mujoco/mujoco-3.3.7", env::var("HOME").unwrap_or_default())
+        } else {
+            mj_root
+        };
+        
         let mj_root = PathBuf::from_str(&mj_root).expect("Unable to get path");
         let mj_lib_windows = mj_root.join("bin");
 
@@ -42,6 +53,12 @@ fn main() {
             let dest = Path::join(Path::new(&target_dir), Path::new("mujoco.dll"));
             eprintln!("Copying {src:?} to {dest:?}");
             std::fs::copy(src, dest).unwrap();
+        }
+
+        // For Unix systems, link MuJoCo library
+        if env::var("CARGO_CFG_UNIX").is_ok() {
+            println!("cargo:rustc-link-search={}/lib", mj_root.display());
+            println!("cargo:rustc-link-lib=mujoco");
         }
     }
 }
